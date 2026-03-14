@@ -15,7 +15,9 @@ The user may write in English OR Russian in any format:
 
 IMPORTANT: Fully support Russian language input. Parse Russian messages the same way as English.
 
-Extract and return ONLY valid JSON, no explanation:
+Extract and return ONLY valid JSON, no explanation.
+
+If the user is RECORDING a transaction:
 {
   "type": "income" | "expense",
   "amount": number,
@@ -26,7 +28,16 @@ Extract and return ONLY valid JSON, no explanation:
   "confidence": number (0-1, how sure you are)
 }
 
-If you cannot parse a transaction (e.g. user is asking a question), return:
+If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?"):
+{
+  "type": "query",
+  "category": string | null (if asking about specific category),
+  "period": "current_month" | "last_month" | "all" (default "current_month"),
+  "queryType": "spending" | "income" | "balance" | "summary",
+  "rawMessage": "original message"
+}
+
+If you cannot parse either a transaction or a question:
 { "type": "unknown", "rawMessage": "original message" }
 
 Canadian context:
