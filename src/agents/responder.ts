@@ -25,6 +25,7 @@ interface TransactionData {
   balance: number;
   transactionCount: number;
   categoryBreakdown: Array<{ category: string; amount: number }>;
+  transactions?: Array<{ type: string; amount: number; category: string; description: string | null }>;
 }
 
 export async function respondToQuery(
@@ -53,6 +54,9 @@ Data:
           .filter((c) => c.amount > 0)
           .map((c) => `${c.category}: $${c.amount.toFixed(2)}`)
           .join(", ")}
+${data.transactions && data.transactions.length > 0
+          ? `- Transactions detail:\n${data.transactions.map((t) => `  ${t.type} $${t.amount.toFixed(2)} [${t.category}]${t.description ? ` — ${t.description}` : ""}`).join("\n")}`
+          : ""}
 
 User's question: "${question}"`,
       },
