@@ -10,13 +10,14 @@ import { setupCommand } from "./commands/setup.js";
 import { historyCommand } from "./commands/history.js";
 import { undoCommand } from "./commands/undo.js";
 import { helpCommand } from "./commands/help.js";
+import { clearImportCommand } from "./commands/clearimport.js";
 import { familyCommand } from "./commands/family.js";
 import { joinCommand } from "./commands/join.js";
 import { leaveCommand } from "./commands/leave.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
-import { handleDocumentMessage } from "./handlers/document.js";
+import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel } from "./handlers/document.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -38,6 +39,11 @@ bot.command("family", (ctx) => familyCommand(ctx as AuthContext));
 bot.command("join", (ctx) => joinCommand(ctx as AuthContext));
 bot.command("leave", (ctx) => leaveCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx));
+bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
+
+// Callback query handlers (inline buttons)
+bot.callbackQuery("file_import_confirm", (ctx) => handleFileImportConfirm(ctx as AuthContext));
+bot.callbackQuery("file_import_cancel", (ctx) => handleFileImportCancel(ctx as AuthContext));
 
 // Message handlers
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
