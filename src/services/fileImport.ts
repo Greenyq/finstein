@@ -1,9 +1,18 @@
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
 import { getEnv } from "../utils/env.js";
+import { getAllCategories } from "../utils/categories.js";
 
 interface ParsedRow {
   [key: string]: string | number | undefined;
+}
+
+export interface FileTransaction {
+  type: "income" | "expense";
+  amount: number;
+  category: string;
+  description: string;
+  date: string; // YYYY-MM-DD
 }
 
 export function parseFileToRows(buffer: Buffer, fileName: string): { rows: ParsedRow[]; headers: string[] } {
@@ -19,34 +28,57 @@ export function parseFileToRows(buffer: Buffer, fileName: string): { rows: Parse
   return { rows, headers };
 }
 
-export async function analyzeFileData(rows: ParsedRow[], headers: string[], currency: string): Promise<string> {
+export async function extractTransactionsFromFile(
+  rows: ParsedRow[],
+  headers: string[],
+  currency: string
+): Promise<FileTransaction[]> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-  // Limit rows sent to Claude to avoid token overflow
+  // Limit rows to avoid token overflow
   const sampleSize = Math.min(rows.length, 500);
   const sample = rows.slice(0, sampleSize);
-  const totalRows = rows.length;
+  const categories = getAllCategories();
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: `You are a financial analyst assistant. The user uploaded a file with their financial history. Analyze the data and provide:
-1. Total income and expenses found
-2. Top spending categories
-3. Monthly trends (if dates are present)
-4. Key insights and recommendations
-5. Any concerning patterns
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 4096,
+    system: `You are a financial data parser. Extract transactions from the uploaded file data.
 
-Format your response in clean Markdown for Telegram (use *bold* and _italic_, not **bold**). Use ${currency} for amounts. Be concise but thorough. Respond in the same language as the data (if Russian data, respond in Russian).`,
+Return ONLY a JSON array of transactions, no explanation:
+[
+  {
+    "type": "income" | "expense",
+    "amount": number (positive),
+    "category": string (must match one of: ${JSON.stringify(categories)}),
+    "description": string (brief),
+    "date": "YYYY-MM-DD"
+  }
+]
+
+Rules:
+- Map each row to a transaction if it contains financial data
+- Skip rows that are headers, totals, or non-financial
+- Use the closest matching category from the list
+- If date is missing, use "unknown"
+- If type is unclear, assume "expense" for negative/debit amounts and "income" for positive/credit amounts
+- Amount must always be positive
+- Currency: ${currency}
+- Support both English and Russian data`,
     messages: [
       {
         role: "user",
-        content: `Here is financial data from an uploaded file (${totalRows} total rows, showing ${sampleSize}).\n\nHeaders: ${headers.join(", ")}\n\nData:\n${JSON.stringify(sample, null, 1)}`,
+        content: `Headers: ${headers.join(", ")}\n\nData (${sample.length} rows):\n${JSON.stringify(sample, null, 1)}`,
       },
     ],
   });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
-  return text || "Could not analyze the file.";
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch?.[0]) {
+    throw new Error("Could not parse transactions from file");
+  }
+
+  return JSON.parse(jsonMatch[0]) as FileTransaction[];
 }

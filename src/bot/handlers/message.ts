@@ -6,8 +6,8 @@ import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
 
-export async function handleTextMessage(ctx: AuthContext): Promise<void> {
-  const text = ctx.message?.text?.trim();
+export async function handleTextMessage(ctx: AuthContext, textOverride?: string): Promise<void> {
+  const text = (textOverride ?? ctx.message?.text)?.trim();
   if (!text) return;
 
   // Skip commands
