@@ -68,7 +68,10 @@ async function main() {
 
   if (env.NODE_ENV === "production" && env.WEBHOOK_URL) {
     // Production: webhook mode via HTTP server
-    const handleUpdate = webhookCallback(bot, "http");
+    // Increase timeout to 60s to allow for API calls
+    const handleUpdate = webhookCallback(bot, "http", {
+      timeoutMilliseconds: 55_000,
+    });
     const port = parseInt(env.PORT, 10);
 
     const server = createServer(async (req, res) => {
@@ -83,8 +86,12 @@ async function main() {
           await handleUpdate(req, res);
         } catch (error) {
           console.error("Webhook handling error:", error);
-          res.writeHead(500);
-          res.end();
+          // ALWAYS return 200 to Telegram — returning 500 causes
+          // Telegram to retry the same update in a loop
+          if (!res.headersSent) {
+            res.writeHead(200);
+            res.end();
+          }
         }
         return;
       }
