@@ -1,5 +1,8 @@
 import type { AuthContext } from "../middleware/auth.js";
-import { parseFileToRows, analyzeFileData } from "../../services/fileImport.js";
+import { parseFileToRows, extractTransactionsFromFile } from "../../services/fileImport.js";
+import { createTransaction } from "../../services/transaction.js";
+import { clearReportCache } from "../commands/report.js";
+import { formatCurrency } from "../../utils/formatting.js";
 import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 
 const SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
@@ -30,7 +33,7 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
     return;
   }
 
-  await ctx.reply("Analyzing your financial file... This may take a moment.");
+  await ctx.reply("📂 Processing your file...");
 
   try {
     const file = await ctx.getFile();
@@ -50,41 +53,62 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
       return;
     }
 
-    await ctx.reply(`Found *${rows.length}* rows. Analyzing...`, { parse_mode: "Markdown" });
+    await ctx.reply(`Found *${rows.length}* rows. Parsing transactions...`, { parse_mode: "Markdown" });
 
-    const analysis = await analyzeFileData(rows, headers, ctx.dbUser.currency);
+    // Extract transactions from file (one API call)
+    const transactions = await extractTransactionsFromFile(rows, headers, ctx.dbUser.currency);
 
-    // Split long messages (Telegram limit is 4096 chars)
-    if (analysis.length > 4000) {
-      const parts = splitMessage(analysis, 4000);
-      for (const part of parts) {
-        await ctx.reply(part, { parse_mode: "Markdown" });
-      }
-    } else {
-      await ctx.reply(analysis, { parse_mode: "Markdown" });
+    if (transactions.length === 0) {
+      await ctx.reply("No financial transactions found in this file.");
+      return;
     }
+
+    // Save all transactions to DB
+    let saved = 0;
+    let skipped = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    for (const t of transactions) {
+      try {
+        const date = t.date && t.date !== "unknown" ? new Date(t.date) : new Date();
+        // Skip if date is invalid
+        if (isNaN(date.getTime())) continue;
+
+        await createTransaction({
+          userId: ctx.dbUser.id,
+          type: t.type,
+          amount: t.amount,
+          category: t.category,
+          description: t.description,
+          authorName: ctx.dbUser.firstName,
+          date,
+          rawMessage: `[file import] ${fileName}`,
+        });
+
+        if (t.type === "income") totalIncome += t.amount;
+        else totalExpense += t.amount;
+        saved++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    // Clear cached report since data changed
+    clearReportCache(ctx.dbUser.id);
+
+    let reply = `✅ *File imported successfully!*\n\n`;
+    reply += `📊 *${saved}* transactions saved`;
+    if (skipped > 0) reply += ` (${skipped} skipped)`;
+    reply += `\n`;
+    reply += `💰 Total income: *${formatCurrency(totalIncome)}*\n`;
+    reply += `💸 Total expenses: *${formatCurrency(totalExpense)}*\n\n`;
+    reply += `Use /report to see your updated financial overview.`;
+
+    await ctx.reply(reply, { parse_mode: "Markdown" });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error("File import failed:", errMsg, error);
     await ctx.reply(`Sorry, I couldn't process this file. Error: ${errMsg}`);
   }
-}
-
-function splitMessage(text: string, maxLength: number): string[] {
-  const parts: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLength) {
-      parts.push(remaining);
-      break;
-    }
-    // Find a good split point (newline)
-    let splitAt = remaining.lastIndexOf("\n", maxLength);
-    if (splitAt === -1 || splitAt < maxLength / 2) {
-      splitAt = maxLength;
-    }
-    parts.push(remaining.substring(0, splitAt));
-    remaining = remaining.substring(splitAt).trimStart();
-  }
-  return parts;
 }

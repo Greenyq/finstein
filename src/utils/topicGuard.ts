@@ -19,7 +19,7 @@ const FINANCIAL_PATTERNS = [
   /spent|paid|bought|earned|got|received|income|salary|paycheck|expense|cost|price|rent|mortgage|bill|tip|transfer|refund|save|loan|debt|owe|grocery|groceries|restaurant|gas|fuel|uber|taxi|coffee|subscription|insurance|invest/i,
 
   // Russian financial keywords
-  /потратил|заплатил|купил|получил|зарплата|доход|расход|стоит|цена|аренда|ипотека|счёт|счет|чаевые|перевод|возврат|сбережения|кредит|долг|продукты|ресторан|бензин|такси|кофе|подписка|страховка/i,
+  /потратил|потратила|заплатил|заплатила|купил|купила|получил|получила|зарплата|доход|расход|стоит|цена|аренда|ипотека|счёт|счет|чаевые|перевод|возврат|сбережения|кредит|долг|продукты|ресторан|бензин|такси|кофе|подписка|страховка|еда|обед|ужин|завтрак|магазин|одежда|лекарства|аптека|парикмахерская|коммуналка|электричество|вода|газ|интернет|телефон|оплата|покупка|деньги|наличные|карта/i,
 
   // Category keywords from the bot
   /tfsa|rrsp|mortgage|wifi|cell|condo/i,
@@ -49,7 +49,7 @@ export function isLikelyFinancial(message: string): boolean {
   // If message has a number, it's very likely financial in this bot context
   if (/\d/.test(trimmed)) return true;
 
-  // Check against non-financial patterns first
+  // Check against non-financial patterns first (greetings, etc.)
   for (const pattern of NON_FINANCIAL_PATTERNS) {
     if (pattern.test(trimmed)) return false;
   }
@@ -58,6 +58,10 @@ export function isLikelyFinancial(message: string): boolean {
   for (const pattern of FINANCIAL_PATTERNS) {
     if (pattern.test(trimmed)) return true;
   }
+
+  // Cyrillic text that wasn't caught by greetings — let it through to the parser
+  // (Russian financial messages like "обед", "бензин заправка" etc.)
+  if (/[а-яёА-ЯЁ]/.test(trimmed)) return true;
 
   // Short messages without financial context — reject
   if (trimmed.split(/\s+/).length <= 3) return false;

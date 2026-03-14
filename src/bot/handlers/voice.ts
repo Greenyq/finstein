@@ -27,16 +27,8 @@ export async function handleVoiceMessage(ctx: AuthContext): Promise<void> {
 
     await ctx.reply(`_Heard: "${transcription}"_`, { parse_mode: "Markdown" });
 
-    // Inject transcription as text and process
-    const fakeCtx = {
-      ...ctx,
-      message: {
-        ...ctx.message,
-        text: transcription,
-      },
-    } as AuthContext;
-
-    await handleTextMessage(fakeCtx);
+    // Process transcription as text message
+    await handleTextMessage(ctx, transcription);
   } catch (error) {
     console.error("Voice handling failed:", {
       userId: ctx.dbUser.id,

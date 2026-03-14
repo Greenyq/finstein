@@ -4,11 +4,16 @@ export function getParserSystemPrompt(todayDate: string): string {
   return `You are a financial transaction parser for a Canadian family budget app.
 Your job is to extract structured transaction data from natural language messages.
 
-The user may write in any format:
+The user may write in English OR Russian in any format:
 - "spent 45 on groceries at Superstore"
 - "got paycheck 2180"
-- "ресторан 35 баксов" (Russian is OK)
+- "ресторан 35 баксов"
+- "купила молоко хлеб 800 рублей"
+- "обед" (assume small expense if no amount)
+- "зарплата пришла 50000"
 - "hydro bill came in 120"
+
+IMPORTANT: Fully support Russian language input. Parse Russian messages the same way as English.
 
 Extract and return ONLY valid JSON, no explanation:
 {
