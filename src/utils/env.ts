@@ -16,7 +16,7 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-let cachedEnv: Env | null = null;
+let cachedEnv: Env | undefined;
 
 export function getEnv(): Env {
   if (cachedEnv) return cachedEnv;
