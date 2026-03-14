@@ -100,9 +100,12 @@ async function main() {
       res.end();
     });
 
-    // Set webhook URL with Telegram
-    await bot.api.setWebhook(`${env.WEBHOOK_URL}/webhook`);
-    console.log(`Webhook set: ${env.WEBHOOK_URL}/webhook`);
+    // Set webhook URL with Telegram — drop pending updates to clear
+    // any stuck retry loops from previous errors
+    await bot.api.setWebhook(`${env.WEBHOOK_URL}/webhook`, {
+      drop_pending_updates: true,
+    });
+    console.log(`Webhook set: ${env.WEBHOOK_URL}/webhook (pending updates dropped)`);
 
     server.listen(port, () => {
       console.log(`FinAdvisor bot running in webhook mode on port ${port}`);
