@@ -3,7 +3,6 @@ import { prisma } from "../db/prisma.js";
 import { getComparisonData, getFixedExpenses } from "./budget.js";
 import { analyzeFinances } from "../agents/analyzer.js";
 import { generateAdvice } from "../agents/advisor.js";
-import { createTransaction } from "./transaction.js";
 import type { Bot } from "grammy";
 
 export function startScheduler(bot: Bot): void {
@@ -16,7 +15,6 @@ export function startScheduler(bot: Bot): void {
       for (const user of users) {
         try {
           await sendMonthlyReport(bot, user);
-          await autoAddFixedExpenses(user.id);
         } catch (error) {
           console.error(`Monthly report failed for user ${user.id}:`, error);
         }
@@ -26,7 +24,25 @@ export function startScheduler(bot: Bot): void {
     }
   });
 
-  console.log("Scheduler started: monthly reports on the 1st at 9:00 AM");
+  // Daily recurring expenses: every day at 8:00 AM, add expenses whose dayOfMonth matches today
+  cron.schedule("0 8 * * *", async () => {
+    const today = new Date().getDate();
+    console.log(`Running daily recurring expenses for day ${today}...`);
+    try {
+      const users = await prisma.user.findMany();
+      for (const user of users) {
+        try {
+          await autoAddDailyRecurring(user.id, today);
+        } catch (error) {
+          console.error(`Recurring expense failed for user ${user.id}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error("Daily recurring cron failed:", error);
+    }
+  });
+
+  console.log("Scheduler started: monthly reports on 1st at 9AM, recurring expenses daily at 8AM");
 }
 
 async function sendMonthlyReport(
@@ -58,25 +74,44 @@ async function sendMonthlyReport(
   });
 }
 
-async function autoAddFixedExpenses(userId: string): Promise<void> {
-  const fixedExpenses = await getFixedExpenses(userId);
-
-  if (fixedExpenses.length === 0) return;
-
-  const transactions = fixedExpenses.map((exp) => ({
-    userId,
-    type: "expense" as const,
-    amount: exp.amount,
-    category: exp.category,
-    description: `${exp.name} (auto)`,
-    rawMessage: "auto-added fixed expense",
-  }));
-
-  // Batch create
-  await prisma.transaction.createMany({
-    data: transactions.map((t) => ({
-      ...t,
-      date: new Date(),
-    })),
+async function autoAddDailyRecurring(userId: string, dayOfMonth: number): Promise<void> {
+  // Find recurring expenses for today's day
+  const expenses = await prisma.fixedExpense.findMany({
+    where: {
+      userId,
+      isActive: true,
+      dayOfMonth: dayOfMonth,
+    },
   });
+
+  if (expenses.length === 0) return;
+
+  // Check if already added today (prevent duplicates on restart)
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+  for (const exp of expenses) {
+    const existing = await prisma.transaction.findFirst({
+      where: {
+        userId,
+        rawMessage: `[recurring] ${exp.name}`,
+        date: { gte: todayStart, lte: todayEnd },
+      },
+    });
+
+    if (existing) continue; // already added today
+
+    await prisma.transaction.create({
+      data: {
+        userId,
+        type: "expense",
+        amount: exp.amount,
+        category: exp.category,
+        description: `${exp.name} (авто)`,
+        date: today,
+        rawMessage: `[recurring] ${exp.name}`,
+      },
+    });
+  }
 }

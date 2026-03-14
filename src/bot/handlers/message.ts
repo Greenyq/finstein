@@ -6,6 +6,7 @@ import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
+import { checkBudgetLimits } from "../commands/limit.js";
 
 /** Detect if text is primarily Russian (has Cyrillic chars) */
 function isRussian(text: string): boolean {
@@ -104,6 +105,14 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     }
 
     await ctx.reply(reply, { parse_mode: "Markdown" });
+
+    // Check budget limits after recording an expense
+    if (result.type === "expense") {
+      const warning = await checkBudgetLimits(ctx.dbUser.id, result.category, result.amount);
+      if (warning) {
+        await ctx.reply(warning, { parse_mode: "Markdown" });
+      }
+    }
   } catch (error) {
     console.error("Message handling failed:", {
       userId: ctx.dbUser.id,

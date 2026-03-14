@@ -21,6 +21,7 @@ model User {
   trialEndsAt   DateTime?
   transactions  Transaction[]
   fixedExpenses FixedExpense[]
+  budgetLimits  BudgetLimit[]
   goals         Goal[]
   createdAt     DateTime       @default(now())
 }
@@ -49,6 +50,17 @@ model FixedExpense {
   category   String
   dayOfMonth Int?
   isActive   Boolean @default(true)
+}
+
+model BudgetLimit {
+  id           String @id @default(cuid())
+  userId       String
+  user         User   @relation(fields: [userId], references: [id])
+  category     String
+  monthlyLimit Float
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, category])
 }
 
 model Goal {
