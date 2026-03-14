@@ -12,12 +12,20 @@ export interface ParsedTransaction {
   confidence: number;
 }
 
+export interface ParsedQuery {
+  type: "query";
+  category: string | null;
+  period: "current_month" | "last_month" | "all";
+  queryType: "spending" | "income" | "balance" | "summary";
+  rawMessage: string;
+}
+
 export interface UnknownMessage {
   type: "unknown";
   rawMessage: string;
 }
 
-export type ParserResult = ParsedTransaction | UnknownMessage;
+export type ParserResult = ParsedTransaction | ParsedQuery | UnknownMessage;
 
 export async function parseMessage(message: string): Promise<ParserResult> {
   const env = getEnv();
@@ -44,6 +52,16 @@ export async function parseMessage(message: string): Promise<ParserResult> {
 
   if (parsed.type === "unknown") {
     return { type: "unknown", rawMessage: message };
+  }
+
+  if (parsed.type === "query") {
+    return {
+      type: "query",
+      category: parsed.category ? String(parsed.category) : null,
+      period: (parsed.period as ParsedQuery["period"]) ?? "current_month",
+      queryType: (parsed.queryType as ParsedQuery["queryType"]) ?? "summary",
+      rawMessage: String(parsed.rawMessage ?? message),
+    };
   }
 
   return {
