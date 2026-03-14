@@ -29,7 +29,7 @@ export async function analyzeFileData(rows: ParsedRow[], headers: string[], curr
   const totalRows = rows.length;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     system: `You are a financial analyst assistant. The user uploaded a file with their financial history. Analyze the data and provide:
 1. Total income and expenses found

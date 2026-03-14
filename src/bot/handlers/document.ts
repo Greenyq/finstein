@@ -64,8 +64,9 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
       await ctx.reply(analysis, { parse_mode: "Markdown" });
     }
   } catch (error) {
-    console.error("File import failed:", error);
-    await ctx.reply("Sorry, I couldn't process this file. Make sure it's a valid CSV or Excel file with financial data.");
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("File import failed:", errMsg, error);
+    await ctx.reply(`Sorry, I couldn't process this file. Error: ${errMsg}`);
   }
 }
 
