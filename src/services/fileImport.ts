@@ -23,7 +23,7 @@ export interface FileTransaction {
 }
 
 export function parseFileToSheets(buffer: Buffer, fileName: string): SheetData[] {
-  const workbook = XLSX.read(buffer, { type: "buffer", raw: true, codepage: 65001 });
+  const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001 });
 
   if (workbook.SheetNames.length === 0) {
     throw new Error("File has no sheets");
@@ -50,6 +50,19 @@ export function parseFileToRows(buffer: Buffer, fileName: string): { rows: Parse
   const sheets = parseFileToSheets(buffer, fileName);
   if (sheets.length === 0) return { rows: [], headers: [] };
   return { rows: sheets[0]!.rows, headers: sheets[0]!.headers };
+}
+
+/** Get a preview of first N rows for debugging */
+export function getSheetPreview(sheet: SheetData, maxRows = 3): string {
+  const lines = [`Headers: ${sheet.headers.join(" | ")}`];
+  for (const row of sheet.rows.slice(0, maxRows)) {
+    const vals = sheet.headers.map((h) => {
+      const v = row[h];
+      return v !== undefined && v !== null ? String(v) : "";
+    });
+    lines.push(vals.join(" | "));
+  }
+  return lines.join("\n");
 }
 
 /** Convert rows to compact CSV-like string instead of JSON to save tokens */
@@ -141,8 +154,12 @@ Rules: one row = one transaction. EXACT amounts. Skip totals. Use sheet name for
     }
 
     const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+    console.log(`AI response for sheet "${sheet.sheetName}":`, text.substring(0, 500));
     const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch?.[0]) continue;
+    if (!jsonMatch?.[0]) {
+      console.warn(`No JSON array found in AI response for sheet "${sheet.sheetName}"`);
+      continue;
+    }
 
     const transactions = JSON.parse(jsonMatch[0]) as FileTransaction[];
     for (const t of transactions) {

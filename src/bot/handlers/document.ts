@@ -1,5 +1,5 @@
 import type { AuthContext } from "../middleware/auth.js";
-import { parseFileToSheets, extractTransactionsFromSheets, type FileTransaction, type SheetData } from "../../services/fileImport.js";
+import { parseFileToSheets, extractTransactionsFromSheets, getSheetPreview, type FileTransaction, type SheetData } from "../../services/fileImport.js";
 import { createTransaction } from "../../services/transaction.js";
 import { clearReportCache } from "../commands/report.js";
 import { formatCurrency } from "../../utils/formatting.js";
@@ -208,7 +208,15 @@ async function processInBackground(userId: string): Promise<void> {
     const transactions = await extractTransactionsFromSheets(sheets, currency);
 
     if (transactions.length === 0) {
-      await botInstance.api.sendMessage(chatId, "No financial transactions found in the selected sheet(s).");
+      // Show debug info so user can see what the bot parsed from the file
+      let debug = "No financial transactions found.\n\n";
+      debug += "🔍 *Here's what I see in the file:*\n\n";
+      for (const s of sheets) {
+        const preview = getSheetPreview(s, 3);
+        debug += `📄 *${s.sheetName}* (${s.rows.length} rows):\n\`\`\`\n${preview}\n\`\`\`\n`;
+      }
+      debug += "\nPlease check if this looks right. The file format may not be recognized.";
+      await botInstance.api.sendMessage(chatId, debug, { parse_mode: "Markdown" });
       return;
     }
 
