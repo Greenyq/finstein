@@ -7,6 +7,7 @@ import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
 import { checkBudgetLimits } from "../commands/limit.js";
+import { getFamilyMemberIds } from "../../services/family.js";
 
 /** Detect if text is primarily Russian (has Cyrillic chars) */
 function isRussian(text: string): boolean {
@@ -129,21 +130,23 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
 async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Promise<void> {
   const userId = ctx.dbUser.id;
+  const memberIds = await getFamilyMemberIds(userId);
+  const queryIds = memberIds.length > 1 ? memberIds : userId;
 
   // Get transactions based on period
   let transactions;
   let periodLabel: string;
 
   if (query.months && query.months > 1) {
-    transactions = await getLastNMonthsTransactions(userId, query.months);
+    transactions = await getLastNMonthsTransactions(queryIds, query.months);
     periodLabel = ru ? `${query.months} мес.` : `${query.months} months`;
   } else if (query.period === "last_month") {
-    transactions = await getLastMonthTransactions(userId);
+    transactions = await getLastMonthTransactions(queryIds);
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     periodLabel = lastMonth.toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
   } else {
-    transactions = await getMonthlyTransactions(userId);
+    transactions = await getMonthlyTransactions(queryIds);
     periodLabel = new Date().toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
   }
 
