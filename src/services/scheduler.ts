@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma.js";
 import { getComparisonData, getFixedExpenses } from "./budget.js";
 import { analyzeFinances } from "../agents/analyzer.js";
 import { generateAdvice } from "../agents/advisor.js";
+import { getFamilyMemberIds } from "./family.js";
 import type { Bot } from "grammy";
 
 export function startScheduler(bot: Bot): void {
@@ -49,7 +50,10 @@ async function sendMonthlyReport(
   bot: Bot,
   user: { id: string; telegramId: bigint; monthlyIncome: number }
 ): Promise<void> {
-  const comparison = await getComparisonData(user.id);
+  const memberIds = await getFamilyMemberIds(user.id);
+  const queryIds = memberIds.length > 1 ? memberIds : user.id;
+
+  const comparison = await getComparisonData(queryIds);
 
   if (comparison.currentMonth.transactionCount === 0) return;
 
