@@ -23,7 +23,7 @@ export interface FileTransaction {
 }
 
 export function parseFileToSheets(buffer: Buffer, fileName: string): SheetData[] {
-  const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001 });
+  const workbook = XLSX.read(buffer, { type: "buffer", raw: true, codepage: 65001 });
 
   if (workbook.SheetNames.length === 0) {
     throw new Error("File has no sheets");
