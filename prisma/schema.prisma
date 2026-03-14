@@ -18,6 +18,7 @@ model User {
   role          String         @default("owner")
   isPremium     Boolean        @default(false)
   familyPlan    Boolean        @default(false)
+  trialEndsAt   DateTime?
   transactions  Transaction[]
   fixedExpenses FixedExpense[]
   goals         Goal[]

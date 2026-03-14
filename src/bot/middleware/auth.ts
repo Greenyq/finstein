@@ -11,10 +11,13 @@ export async function authMiddleware(ctx: Context, next: NextFunction): Promise<
   });
 
   if (!user && ctx.message?.text === "/start") {
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 7);
     user = await prisma.user.create({
       data: {
         telegramId,
         firstName: ctx.from.first_name ?? "User",
+        trialEndsAt,
       },
     });
   }
@@ -40,5 +43,6 @@ export type AuthContext = Context & {
     role: string;
     isPremium: boolean;
     familyPlan: boolean;
+    trialEndsAt: Date | null;
   };
 };

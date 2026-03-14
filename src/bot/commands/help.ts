@@ -18,7 +18,8 @@ export async function helpCommand(ctx: Context): Promise<void> {
       `• _"spent 45 on groceries"_\n` +
       `• _"got paycheck 2180"_\n` +
       `• _"restaurant 35"_\n` +
-      `• Or send a voice message!`,
+      `• Or send a voice message!\n` +
+      `• Send a CSV/Excel file to analyze past finances ⭐`,
     { parse_mode: "Markdown" }
   );
 }

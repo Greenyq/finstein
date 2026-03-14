@@ -16,6 +16,7 @@ import { leaveCommand } from "./commands/leave.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
+import { handleDocumentMessage } from "./handlers/document.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -42,6 +43,7 @@ bot.command("help", (ctx) => helpCommand(ctx));
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
 bot.on("message:voice", (ctx) => handleVoiceMessage(ctx as AuthContext));
 bot.on("message:photo", (ctx) => handlePhotoMessage(ctx as AuthContext));
+bot.on("message:document", (ctx) => handleDocumentMessage(ctx as AuthContext));
 
 // Error handler
 bot.catch((err) => {
