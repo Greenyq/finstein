@@ -17,7 +17,7 @@ import { leaveCommand } from "./commands/leave.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
-import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel } from "./handlers/document.js";
+import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel, handleSheetSelect, setDocumentBotInstance } from "./handlers/document.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -41,9 +41,13 @@ bot.command("leave", (ctx) => leaveCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
 
+// Pass bot instance to document handler for background messaging
+setDocumentBotInstance(bot);
+
 // Callback query handlers (inline buttons)
 bot.callbackQuery("file_import_confirm", (ctx) => handleFileImportConfirm(ctx as AuthContext));
 bot.callbackQuery("file_import_cancel", (ctx) => handleFileImportCancel(ctx as AuthContext));
+bot.callbackQuery(/^sheet_select_/, (ctx) => handleSheetSelect(ctx as AuthContext));
 
 // Message handlers
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
