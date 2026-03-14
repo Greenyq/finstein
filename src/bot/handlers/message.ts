@@ -8,6 +8,7 @@ import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
 import { checkBudgetLimits } from "../commands/limit.js";
 import { getFamilyMemberIds } from "../../services/family.js";
+import { respondToQuery } from "../../agents/responder.js";
 
 /** Detect if text is primarily Russian (has Cyrillic chars) */
 function isRussian(text: string): boolean {
@@ -52,6 +53,40 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     const result = await parseMessage(text);
 
     if (result.type === "unknown") {
+      // Try to answer conversational financial messages using AI + current data
+      try {
+        const memberIds = await getFamilyMemberIds(ctx.dbUser.id);
+        const queryIds = memberIds.length > 1 ? memberIds : ctx.dbUser.id;
+        const transactions = await getMonthlyTransactions(queryIds);
+
+        if (transactions.length > 0) {
+          const byCategory = new Map<string, number>();
+          let totalIncome = 0;
+          let totalExpenses = 0;
+          for (const t of transactions) {
+            if (t.type === "income") totalIncome += t.amount;
+            else {
+              totalExpenses += t.amount;
+              byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
+            }
+          }
+
+          const periodLabel = new Date().toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
+          const reply = await respondToQuery(text, {
+            totalIncome,
+            totalExpenses,
+            balance: totalIncome - totalExpenses,
+            transactionCount: transactions.length,
+            categoryBreakdown: Array.from(byCategory.entries()).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount),
+          }, periodLabel, ru);
+
+          await ctx.reply(reply, { parse_mode: "Markdown" });
+          return;
+        }
+      } catch {
+        // Fall through to default response
+      }
+
       if (ru) {
         await ctx.reply(
           "Не понял — попробуйте что-то вроде:\n" +
@@ -176,60 +211,23 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  let reply = "";
-
-  if (query.queryType === "income") {
-    reply = ru
-      ? `💰 *Доход за ${periodLabel}*: ${formatCurrency(totalIncome)}`
-      : `💰 *Income for ${periodLabel}*: ${formatCurrency(totalIncome)}`;
-    if (query.category) reply += ` (${query.category})`;
-    const count = filtered.filter((t) => t.type === "income").length;
-    reply += ru ? `\n_${count} транзакций_` : `\n_${count} transactions_`;
-  } else if (query.queryType === "balance") {
-    const balance = totalIncome - totalExpenses;
-    reply = ru
-      ? `📊 *Баланс за ${periodLabel}*\n`
-      : `📊 *Balance for ${periodLabel}*\n`;
-    reply += ru
-      ? `💰 Доход: ${formatCurrency(totalIncome)}\n💸 Расходы: ${formatCurrency(totalExpenses)}\n`
-      : `💰 Income: ${formatCurrency(totalIncome)}\n💸 Expenses: ${formatCurrency(totalExpenses)}\n`;
-    reply += `${balance >= 0 ? "✅" : "⚠️"} ${ru ? "Итого" : "Net"}: *${formatCurrency(balance)}*`;
-  } else {
-    // spending or summary
-    reply = ru
-      ? `💸 *Расходы за ${periodLabel}*`
-      : `💸 *Expenses for ${periodLabel}*`;
-    if (query.category) reply += ` — ${query.category}`;
-    reply += `: *${formatCurrency(totalExpenses)}*\n`;
-
-    // Show category breakdown if no specific category filter
-    if (!query.category) {
-      const byCategory = new Map<string, number>();
-      for (const t of filtered.filter((t) => t.type === "expense")) {
-        byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
-      }
-      const sorted = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
-      if (sorted.length > 0) {
-        reply += "\n";
-        for (const [cat, amount] of sorted.slice(0, 8)) {
-          reply += `• ${cat}: ${formatCurrency(amount)}\n`;
-        }
-      }
-    } else {
-      // Show individual transactions for specific category
-      const items = filtered.filter((t) => t.type === "expense").slice(0, 10);
-      if (items.length > 0) {
-        reply += "\n";
-        for (const t of items) {
-          const desc = t.description ? ` — _${t.description}_` : "";
-          reply += `• ${formatCurrency(t.amount)}${desc}\n`;
-        }
-      }
-    }
-
-    const count = filtered.filter((t) => t.type === "expense").length;
-    reply += ru ? `\n_${count} транзакций_` : `\n_${count} transactions_`;
+  // Build category breakdown
+  const byCategory = new Map<string, number>();
+  for (const t of filtered.filter((t) => t.type === "expense")) {
+    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
   }
+  const categoryBreakdown = Array.from(byCategory.entries())
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // Use AI to generate a smart, contextual response
+  const reply = await respondToQuery(query.rawMessage, {
+    totalIncome,
+    totalExpenses,
+    balance: totalIncome - totalExpenses,
+    transactionCount: filtered.length,
+    categoryBreakdown,
+  }, periodLabel, ru);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
 }
