@@ -78,6 +78,12 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
             balance: totalIncome - totalExpenses,
             transactionCount: transactions.length,
             categoryBreakdown: Array.from(byCategory.entries()).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount),
+            transactions: transactions.map((t) => ({
+              type: t.type,
+              amount: t.amount,
+              category: t.category,
+              description: t.description,
+            })),
           }, periodLabel, ru);
 
           await ctx.reply(reply, { parse_mode: "Markdown" });
@@ -227,6 +233,12 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
     balance: totalIncome - totalExpenses,
     transactionCount: filtered.length,
     categoryBreakdown,
+    transactions: filtered.map((t) => ({
+      type: t.type,
+      amount: t.amount,
+      category: t.category,
+      description: t.description,
+    })),
   }, periodLabel, ru);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
