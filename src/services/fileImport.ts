@@ -52,6 +52,19 @@ export function parseFileToRows(buffer: Buffer, fileName: string): { rows: Parse
   return { rows: sheets[0]!.rows, headers: sheets[0]!.headers };
 }
 
+/** Convert rows to compact CSV-like string instead of JSON to save tokens */
+function rowsToCompactString(rows: ParsedRow[], headers: string[]): string {
+  const lines = [headers.join("|")];
+  for (const row of rows) {
+    const vals = headers.map((h) => {
+      const v = row[h];
+      return v !== undefined && v !== null ? String(v) : "";
+    });
+    lines.push(vals.join("|"));
+  }
+  return lines.join("\n");
+}
+
 export async function extractTransactionsFromSheets(
   sheets: SheetData[],
   currency: string,
@@ -65,45 +78,67 @@ export async function extractTransactionsFromSheets(
 
   // Process each sheet separately — each sheet is typically a month
   for (const sheet of sheets) {
-    const sampleSize = Math.min(sheet.rows.length, 200);
+    const sampleSize = Math.min(sheet.rows.length, 100);
     const sample = sheet.rows.slice(0, sampleSize);
 
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system: `You are a financial data parser. Extract transactions from the uploaded file data.
+    // Convert to compact pipe-delimited format to save tokens
+    const compactData = rowsToCompactString(sample, sheet.headers);
 
-The data comes from a sheet named "${sheet.sheetName}". The sheet name usually indicates the MONTH (e.g. "Январь" = January, "Февраль" = February, "Март" = March, "March", "Mar", etc.). Use this to determine the month for dates. Year: ${year}.
+    let response;
+    try {
+      response = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2048,
+        system: `You are a financial data parser. Extract transactions from pipe-delimited data.
 
-Return ONLY a JSON array of transactions, no explanation:
-[
-  {
-    "type": "income" | "expense",
-    "amount": number (positive),
-    "category": string (must match one of: ${JSON.stringify(categories)}),
-    "description": string (brief),
-    "date": "YYYY-MM-DD"
-  }
-]
+Sheet: "${sheet.sheetName}" (this is the MONTH name, e.g. "Январь"=Jan, "Февраль"=Feb, "Март"=Mar). Year: ${year}.
 
-Rules:
-- Map each row to EXACTLY ONE transaction — do NOT combine or split rows
-- Use the EXACT amount from the data — do NOT calculate, sum, or modify amounts
-- Skip rows that are headers, totals, subtotals, summaries, or non-financial
-- Use the closest matching category from the list
-- For dates: use the sheet name to determine the month, and row data for the day if available. If no day, use the 1st of the month.
-- If type is unclear, assume "expense" for negative/debit amounts and "income" for positive/credit amounts
-- Amount must always be positive
-- Currency: ${currency}
-- Support both English and Russian data
-- CRITICAL: Each transaction amount must match a single value from the original data`,
-      messages: [
-        {
-          role: "user",
-          content: `Sheet: "${sheet.sheetName}"\nHeaders: ${sheet.headers.join(", ")}\n\nData (${sample.length} rows):\n${JSON.stringify(sample, null, 1)}`,
-        },
-      ],
-    });
+Return ONLY a JSON array, no explanation:
+[{"type":"income"|"expense","amount":number,"category":"...","description":"...","date":"YYYY-MM-DD"}]
+
+Categories: ${JSON.stringify(categories)}
+
+Rules: one row = one transaction. EXACT amounts from data. Skip totals/headers. Use sheet name for month. ${currency} currency.`,
+        messages: [
+          {
+            role: "user",
+            content: compactData,
+          },
+        ],
+      });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+
+      // Rate limit — wait and retry once
+      if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+        console.log(`Rate limited on sheet "${sheet.sheetName}", waiting 60s...`);
+        await new Promise((r) => setTimeout(r, 60_000));
+        try {
+          response = await client.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 2048,
+            system: `You are a financial data parser. Extract transactions from pipe-delimited data.
+
+Sheet: "${sheet.sheetName}" (this is the MONTH name). Year: ${year}.
+
+Return ONLY a JSON array:
+[{"type":"income"|"expense","amount":number,"category":"...","description":"...","date":"YYYY-MM-DD"}]
+
+Categories: ${JSON.stringify(categories)}
+
+Rules: one row = one transaction. EXACT amounts. Skip totals. Use sheet name for month. ${currency}.`,
+            messages: [{ role: "user", content: compactData }],
+          });
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          console.error(`Retry failed for sheet "${sheet.sheetName}":`, retryMsg);
+          throw new Error(`API error on sheet "${sheet.sheetName}": ${retryMsg}`);
+        }
+      } else {
+        // Any other API error — stop immediately
+        throw new Error(`API error on sheet "${sheet.sheetName}": ${errMsg}`);
+      }
+    }
 
     const text = response.content[0]?.type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -113,6 +148,11 @@ Rules:
     for (const t of transactions) {
       t.sheetName = sheet.sheetName;
       allTransactions.push(t);
+    }
+
+    // Small delay between sheets to avoid rate limits
+    if (sheets.indexOf(sheet) < sheets.length - 1) {
+      await new Promise((r) => setTimeout(r, 2000));
     }
   }
 
