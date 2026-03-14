@@ -68,7 +68,7 @@ describe("File Import - CSV/Excel parsing", () => {
     const firstRow = rows[0]!;
     const values = Object.values(firstRow);
     expect(values).toContain("Продукты");
-    // Numbers are parsed as numbers (not raw strings)
-    expect(values).toContain(2500);
+    // raw mode keeps numbers as strings
+    expect(values).toContain("2500");
   });
 });
