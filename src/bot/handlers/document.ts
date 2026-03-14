@@ -21,6 +21,7 @@ interface PendingImport {
 
 interface PendingSheets {
   sheets: SheetData[];
+  selectedNames: Set<string>; // which sheets are toggled on
   fileName: string;
   currency: string;
   userId: string;
@@ -38,6 +39,43 @@ let botInstance: Bot | null = null;
 
 export function setDocumentBotInstance(bot: Bot): void {
   botInstance = bot;
+}
+
+function buildSheetKeyboard(pending: PendingSheets): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  let col = 0;
+  for (const s of pending.sheets) {
+    const selected = pending.selectedNames.has(s.sheetName);
+    const label = selected ? `✅ ${s.sheetName}` : s.sheetName;
+    keyboard.text(label, `sheet_toggle_${s.sheetName}`);
+    col++;
+    if (col >= 3) {
+      keyboard.row();
+      col = 0;
+    }
+  }
+  keyboard.row();
+  keyboard.text("📥 All sheets", "sheet_toggle_ALL");
+  keyboard.row();
+  if (pending.selectedNames.size > 0) {
+    keyboard.text(`▶️ Import (${pending.selectedNames.size})`, "sheet_import_go");
+  }
+  keyboard.text("❌ Cancel", "file_import_cancel");
+  return keyboard;
+}
+
+function buildSheetMessage(pending: PendingSheets): string {
+  let msg = `📂 *${pending.fileName}*\nFound *${pending.sheets.length}* data sheets:\n\n`;
+  for (const s of pending.sheets) {
+    const check = pending.selectedNames.has(s.sheetName) ? "✅" : "⬜";
+    msg += `${check} *${s.sheetName}* — ${s.rowCount} rows\n`;
+  }
+  if (pending.selectedNames.size > 0) {
+    msg += `\n*${pending.selectedNames.size}* sheet(s) selected. Tap *Import* to start.`;
+  } else {
+    msg += `\nTap sheets to select, then *Import*.`;
+  }
+  return msg;
 }
 
 export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
@@ -92,9 +130,9 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
 
     // If only 1 sheet (or CSV), process it directly
     if (dataSheets.length === 1) {
-      // Store and process immediately
       pendingSheets.set(ctx.dbUser.id, {
         sheets: dataSheets,
+        selectedNames: new Set([dataSheets[0]!.sheetName]),
         fileName,
         currency: ctx.dbUser.currency,
         userId: ctx.dbUser.id,
@@ -105,46 +143,27 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
 
       await ctx.reply(`📂 Found *${dataSheets[0]!.rowCount}* rows in "${dataSheets[0]!.sheetName}". Parsing...`, { parse_mode: "Markdown" });
 
-      // Process in background to avoid webhook timeout
       processInBackground(ctx.dbUser.id).catch((err) => {
         console.error("Background processing failed:", err);
       });
       return;
     }
 
-    // Multiple sheets — let user pick which to import
-    let msg = `📂 *${fileName}*\nFound *${dataSheets.length}* data sheets:\n\n`;
-    for (const s of dataSheets) {
-      msg += `• *${s.sheetName}* — ${s.rowCount} rows\n`;
-    }
-    msg += `\nWhich sheets to import?`;
-
-    // Store sheets for later
-    pendingSheets.set(ctx.dbUser.id, {
+    // Multiple sheets — let user toggle which to import
+    const pending: PendingSheets = {
       sheets: dataSheets,
+      selectedNames: new Set<string>(),
       fileName,
       currency: ctx.dbUser.currency,
       userId: ctx.dbUser.id,
       chatId: ctx.chat!.id,
       authorName: ctx.dbUser.firstName,
       expiresAt: Date.now() + 10 * 60 * 1000,
-    });
+    };
+    pendingSheets.set(ctx.dbUser.id, pending);
 
-    const keyboard = new InlineKeyboard();
-
-    // Add individual month buttons (max 3 per row)
-    let col = 0;
-    for (const s of dataSheets) {
-      keyboard.text(s.sheetName, `sheet_select_${s.sheetName}`);
-      col++;
-      if (col >= 3) {
-        keyboard.row();
-        col = 0;
-      }
-    }
-    keyboard.row();
-    keyboard.text("📥 All sheets", "sheet_select_ALL");
-    keyboard.text("❌ Cancel", "file_import_cancel");
+    const msg = buildSheetMessage(pending);
+    const keyboard = buildSheetKeyboard(pending);
 
     await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {
@@ -154,7 +173,7 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
   }
 }
 
-export async function handleSheetSelect(ctx: AuthContext): Promise<void> {
+export async function handleSheetToggle(ctx: AuthContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data) return;
 
@@ -165,33 +184,59 @@ export async function handleSheetSelect(ctx: AuthContext): Promise<void> {
     return;
   }
 
-  await ctx.answerCallbackQuery();
+  const name = data.replace("sheet_toggle_", "");
 
-  const selection = data.replace("sheet_select_", "");
-
-  let selectedSheets: SheetData[];
-  if (selection === "ALL") {
-    selectedSheets = pending.sheets;
-  } else {
-    const sheet = pending.sheets.find((s) => s.sheetName === selection);
-    if (!sheet) {
-      await ctx.editMessageText("Sheet not found. Please re-upload the file.");
-      return;
+  if (name === "ALL") {
+    // Toggle all: if all selected, deselect all; otherwise select all
+    if (pending.selectedNames.size === pending.sheets.length) {
+      pending.selectedNames.clear();
+    } else {
+      for (const s of pending.sheets) {
+        pending.selectedNames.add(s.sheetName);
+      }
     }
-    selectedSheets = [sheet];
+  } else {
+    // Toggle individual sheet
+    if (pending.selectedNames.has(name)) {
+      pending.selectedNames.delete(name);
+    } else {
+      pending.selectedNames.add(name);
+    }
   }
 
-  // Update pending with only selected sheets
-  pending.sheets = selectedSheets;
+  await ctx.answerCallbackQuery();
 
-  const names = selectedSheets.map((s) => s.sheetName).join(", ");
-  const totalRows = selectedSheets.reduce((s, sh) => s + sh.rowCount, 0);
+  const msg = buildSheetMessage(pending);
+  const keyboard = buildSheetKeyboard(pending);
+
+  await ctx.editMessageText(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+}
+
+export async function handleSheetImportGo(ctx: AuthContext): Promise<void> {
+  const pending = pendingSheets.get(ctx.dbUser.id);
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingSheets.delete(ctx.dbUser.id);
+    await ctx.answerCallbackQuery("Session expired. Please re-upload the file.");
+    return;
+  }
+
+  if (pending.selectedNames.size === 0) {
+    await ctx.answerCallbackQuery("Select at least one sheet first.");
+    return;
+  }
+
+  await ctx.answerCallbackQuery();
+
+  // Filter to selected sheets only
+  pending.sheets = pending.sheets.filter((s) => pending.selectedNames.has(s.sheetName));
+
+  const names = pending.sheets.map((s) => s.sheetName).join(", ");
+  const totalRows = pending.sheets.reduce((s, sh) => s + sh.rowCount, 0);
   await ctx.editMessageText(
     `📂 Parsing *${names}* (${totalRows} rows)...\nThis may take a moment.`,
     { parse_mode: "Markdown" }
   );
 
-  // Process in background to avoid webhook timeout
   processInBackground(ctx.dbUser.id).catch((err) => {
     console.error("Background processing failed:", err);
   });
@@ -201,14 +246,13 @@ async function processInBackground(userId: string): Promise<void> {
   const pending = pendingSheets.get(userId);
   if (!pending || !botInstance) return;
 
-  const { sheets, fileName, currency, chatId, authorName } = pending;
+  const { sheets, fileName, currency, chatId } = pending;
   pendingSheets.delete(userId);
 
   try {
     const transactions = await extractTransactionsFromSheets(sheets, currency);
 
     if (transactions.length === 0) {
-      // Show debug info so user can see what the bot parsed from the file
       let debug = "No financial transactions found.\n\n";
       debug += "🔍 *Here's what I see in the file:*\n\n";
       for (const s of sheets) {
@@ -253,7 +297,6 @@ async function processInBackground(userId: string): Promise<void> {
 
     preview += `\n⚠️ *Check the amounts above.* Save to database?`;
 
-    // Store for confirmation
     pendingImports.set(userId, {
       transactions,
       fileName,

@@ -83,7 +83,7 @@ describe("Advisor Agent", () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-20250514",
       })
     );
   });

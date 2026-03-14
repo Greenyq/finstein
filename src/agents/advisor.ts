@@ -8,7 +8,7 @@ export async function generateAdvice(analysis: AnalysisResult): Promise<string> 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6-20250514",
+    model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
     system: ADVISOR_SYSTEM_PROMPT,
     messages: [

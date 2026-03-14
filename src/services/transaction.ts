@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma.js";
-import { getMonthRange, getLastMonthRange } from "../utils/formatting.js";
+import { getMonthRange, getLastMonthRange, getLastNMonthsRange } from "../utils/formatting.js";
 
 interface CreateTransactionInput {
   userId: string;
@@ -43,6 +43,18 @@ export async function getMonthlyTransactions(userId: string | string[], date?: D
 
 export async function getLastMonthTransactions(userId: string | string[]) {
   const { start, end } = getLastMonthRange();
+  const userFilter = Array.isArray(userId) ? { in: userId } : userId;
+  return prisma.transaction.findMany({
+    where: {
+      userId: userFilter,
+      date: { gte: start, lte: end },
+    },
+    orderBy: { date: "desc" },
+  });
+}
+
+export async function getLastNMonthsTransactions(userId: string | string[], months: number) {
+  const { start, end } = getLastNMonthsRange(months);
   const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
     where: {

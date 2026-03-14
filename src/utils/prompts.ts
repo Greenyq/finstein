@@ -28,11 +28,12 @@ If the user is RECORDING a transaction:
   "confidence": number (0-1, how sure you are)
 }
 
-If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?"):
+If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты"):
 {
   "type": "query",
   "category": string | null (if asking about specific category),
   "period": "current_month" | "last_month" | "all" (default "current_month"),
+  "months": number | null (if user asks for multiple months, e.g. "за 2 месяца" = 2, "last 3 months" = 3),
   "queryType": "spending" | "income" | "balance" | "summary",
   "rawMessage": "original message"
 }

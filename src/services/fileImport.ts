@@ -112,6 +112,7 @@ Rules:
 - Use EXACT amounts from the data
 - For dates: if specific dates are in the data, use them. Otherwise use the sheet name as month + day 1
 - Classify each as income or expense based on context
+- IMPORTANT: "description" must contain the original item name/comment from the data (e.g. "Walmart", "Netflix", "молоко хлеб"). Never leave description empty — use the row text.
 - ${currency} currency`,
         messages: [
           {
