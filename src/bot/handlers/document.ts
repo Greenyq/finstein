@@ -1,17 +1,44 @@
 import type { AuthContext } from "../middleware/auth.js";
-import { parseFileToSheets, extractTransactionsFromSheets, type FileTransaction } from "../../services/fileImport.js";
+import { parseFileToSheets, extractTransactionsFromSheets, type FileTransaction, type SheetData } from "../../services/fileImport.js";
 import { createTransaction } from "../../services/transaction.js";
 import { clearReportCache } from "../commands/report.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 import { InlineKeyboard } from "grammy";
+import type { Bot } from "grammy";
 
 const SUPPORTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-// Temporary storage for pending file imports (userId -> transactions)
-// Entries expire after 10 minutes
-const pendingImports = new Map<string, { transactions: FileTransaction[]; fileName: string; expiresAt: number }>();
+// Skip sheets that are clearly not monthly data
+const SKIP_SHEETS = /dashboard|summary|total|итого|сводка|overview/i;
+
+interface PendingImport {
+  transactions: FileTransaction[];
+  fileName: string;
+  expiresAt: number;
+}
+
+interface PendingSheets {
+  sheets: SheetData[];
+  fileName: string;
+  currency: string;
+  userId: string;
+  chatId: number;
+  authorName: string;
+  expiresAt: number;
+}
+
+// Temporary storage
+const pendingImports = new Map<string, PendingImport>();
+const pendingSheets = new Map<string, PendingSheets>();
+
+// We need bot reference for background messaging
+let botInstance: Bot | null = null;
+
+export function setDocumentBotInstance(bot: Bot): void {
+  botInstance = bot;
+}
 
 export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
   if (!requirePremium(ctx, "report")) {
@@ -38,8 +65,6 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
     return;
   }
 
-  await ctx.reply("📂 Processing your file...");
-
   try {
     const file = await ctx.getFile();
     const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
@@ -50,7 +75,6 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-
     const sheets = parseFileToSheets(buffer, fileName);
 
     if (sheets.length === 0) {
@@ -58,25 +82,139 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
       return;
     }
 
-    const totalRows = sheets.reduce((sum, s) => sum + s.rows.length, 0);
-    const sheetNames = sheets.map((s) => s.sheetName).join(", ");
-    await ctx.reply(
-      `Found *${sheets.length}* sheet(s): _${sheetNames}_\n*${totalRows}* total rows. Parsing...`,
-      { parse_mode: "Markdown" }
-    );
+    // Filter out dashboard/summary sheets
+    const dataSheets = sheets.filter((s) => !SKIP_SHEETS.test(s.sheetName));
 
-    // Extract transactions from each sheet separately
-    const transactions = await extractTransactionsFromSheets(sheets, ctx.dbUser.currency);
-
-    if (transactions.length === 0) {
-      await ctx.reply("No financial transactions found in this file.");
+    if (dataSheets.length === 0) {
+      await ctx.reply("No data sheets found (only dashboards/summaries).");
       return;
     }
 
-    // Build preview grouped by sheet (month)
+    // If only 1 sheet (or CSV), process it directly
+    if (dataSheets.length === 1) {
+      // Store and process immediately
+      pendingSheets.set(ctx.dbUser.id, {
+        sheets: dataSheets,
+        fileName,
+        currency: ctx.dbUser.currency,
+        userId: ctx.dbUser.id,
+        chatId: ctx.chat!.id,
+        authorName: ctx.dbUser.firstName,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+      });
+
+      await ctx.reply(`📂 Found *${dataSheets[0]!.rows.length}* rows in "${dataSheets[0]!.sheetName}". Parsing...`, { parse_mode: "Markdown" });
+
+      // Process in background to avoid webhook timeout
+      processInBackground(ctx.dbUser.id).catch((err) => {
+        console.error("Background processing failed:", err);
+      });
+      return;
+    }
+
+    // Multiple sheets — let user pick which to import
+    let msg = `📂 *${fileName}*\nFound *${dataSheets.length}* data sheets:\n\n`;
+    for (const s of dataSheets) {
+      msg += `• *${s.sheetName}* — ${s.rows.length} rows\n`;
+    }
+    msg += `\nWhich sheets to import?`;
+
+    // Store sheets for later
+    pendingSheets.set(ctx.dbUser.id, {
+      sheets: dataSheets,
+      fileName,
+      currency: ctx.dbUser.currency,
+      userId: ctx.dbUser.id,
+      chatId: ctx.chat!.id,
+      authorName: ctx.dbUser.firstName,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    const keyboard = new InlineKeyboard();
+
+    // Add individual month buttons (max 3 per row)
+    let col = 0;
+    for (const s of dataSheets) {
+      keyboard.text(s.sheetName, `sheet_select_${s.sheetName}`);
+      col++;
+      if (col >= 3) {
+        keyboard.row();
+        col = 0;
+      }
+    }
+    keyboard.row();
+    keyboard.text("📥 All sheets", "sheet_select_ALL");
+    keyboard.text("❌ Cancel", "file_import_cancel");
+
+    await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("File upload failed:", errMsg);
+    await ctx.reply(`Error reading file: ${errMsg}`);
+  }
+}
+
+export async function handleSheetSelect(ctx: AuthContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data) return;
+
+  const pending = pendingSheets.get(ctx.dbUser.id);
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingSheets.delete(ctx.dbUser.id);
+    await ctx.answerCallbackQuery("Session expired. Please re-upload the file.");
+    return;
+  }
+
+  await ctx.answerCallbackQuery();
+
+  const selection = data.replace("sheet_select_", "");
+
+  let selectedSheets: SheetData[];
+  if (selection === "ALL") {
+    selectedSheets = pending.sheets;
+  } else {
+    const sheet = pending.sheets.find((s) => s.sheetName === selection);
+    if (!sheet) {
+      await ctx.editMessageText("Sheet not found. Please re-upload the file.");
+      return;
+    }
+    selectedSheets = [sheet];
+  }
+
+  // Update pending with only selected sheets
+  pending.sheets = selectedSheets;
+
+  const names = selectedSheets.map((s) => s.sheetName).join(", ");
+  const totalRows = selectedSheets.reduce((s, sh) => s + sh.rows.length, 0);
+  await ctx.editMessageText(
+    `📂 Parsing *${names}* (${totalRows} rows)...\nThis may take a moment.`,
+    { parse_mode: "Markdown" }
+  );
+
+  // Process in background to avoid webhook timeout
+  processInBackground(ctx.dbUser.id).catch((err) => {
+    console.error("Background processing failed:", err);
+  });
+}
+
+async function processInBackground(userId: string): Promise<void> {
+  const pending = pendingSheets.get(userId);
+  if (!pending || !botInstance) return;
+
+  const { sheets, fileName, currency, chatId, authorName } = pending;
+  pendingSheets.delete(userId);
+
+  try {
+    const transactions = await extractTransactionsFromSheets(sheets, currency);
+
+    if (transactions.length === 0) {
+      await botInstance.api.sendMessage(chatId, "No financial transactions found in the selected sheet(s).");
+      return;
+    }
+
+    // Build preview grouped by sheet
     let preview = `📋 *Parsed ${transactions.length} transactions:*\n`;
 
-    // Group by sheet
     const bySheet = new Map<string, FileTransaction[]>();
     for (const t of transactions) {
       const key = t.sheetName ?? "Unknown";
@@ -91,42 +229,41 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
 
       preview += `\n📅 *${sheet}* (${txns.length} txns)\n`;
       if (income > 0) preview += `  💰 Income: ${formatCurrency(income)}\n`;
-      preview += `  💸 Expenses: ${formatCurrency(expense)}\n`;
+      if (expense > 0) {
+        preview += `  💸 Expenses: ${formatCurrency(expense)}\n`;
 
-      // Category breakdown per sheet
-      const byCategory = new Map<string, number>();
-      for (const t of txns.filter((t) => t.type === "expense")) {
-        byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
-      }
-      const sorted = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
-      for (const [cat, amount] of sorted.slice(0, 5)) {
-        preview += `    • ${cat}: ${formatCurrency(amount)}\n`;
+        const byCategory = new Map<string, number>();
+        for (const t of txns.filter((t) => t.type === "expense")) {
+          byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
+        }
+        const sorted = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
+        for (const [cat, amount] of sorted.slice(0, 5)) {
+          preview += `    • ${cat}: ${formatCurrency(amount)}\n`;
+        }
       }
     }
 
     preview += `\n⚠️ *Check the amounts above.* Save to database?`;
 
-    // Store pending import (expires in 10 min)
-    pendingImports.set(ctx.dbUser.id, {
+    // Store for confirmation
+    pendingImports.set(userId, {
       transactions,
       fileName,
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
-    // Clean up expired entries
-    for (const [key, val] of pendingImports) {
-      if (val.expiresAt < Date.now()) pendingImports.delete(key);
-    }
-
     const keyboard = new InlineKeyboard()
       .text("✅ Save", "file_import_confirm")
       .text("❌ Cancel", "file_import_cancel");
 
-    await ctx.reply(preview, { parse_mode: "Markdown", reply_markup: keyboard });
+    await botInstance.api.sendMessage(chatId, preview, {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    console.error("File import failed:", errMsg, error);
-    await ctx.reply(`Sorry, I couldn't process this file. Error: ${errMsg}`);
+    console.error("File import processing failed:", errMsg);
+    await botInstance.api.sendMessage(chatId, `❌ Import failed: ${errMsg}`);
   }
 }
 
@@ -186,6 +323,7 @@ export async function handleFileImportConfirm(ctx: AuthContext): Promise<void> {
 
 export async function handleFileImportCancel(ctx: AuthContext): Promise<void> {
   pendingImports.delete(ctx.dbUser.id);
+  pendingSheets.delete(ctx.dbUser.id);
   await ctx.answerCallbackQuery("Import cancelled.");
   await ctx.editMessageText("❌ File import cancelled. No data was saved.");
 }

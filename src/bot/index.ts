@@ -17,7 +17,7 @@ import { leaveCommand } from "./commands/leave.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
-import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel } from "./handlers/document.js";
+import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel, handleSheetSelect, setDocumentBotInstance } from "./handlers/document.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -41,9 +41,13 @@ bot.command("leave", (ctx) => leaveCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
 
+// Pass bot instance to document handler for background messaging
+setDocumentBotInstance(bot);
+
 // Callback query handlers (inline buttons)
 bot.callbackQuery("file_import_confirm", (ctx) => handleFileImportConfirm(ctx as AuthContext));
 bot.callbackQuery("file_import_cancel", (ctx) => handleFileImportCancel(ctx as AuthContext));
+bot.callbackQuery(/^sheet_select_/, (ctx) => handleSheetSelect(ctx as AuthContext));
 
 // Message handlers
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
@@ -64,7 +68,10 @@ async function main() {
 
   if (env.NODE_ENV === "production" && env.WEBHOOK_URL) {
     // Production: webhook mode via HTTP server
-    const handleUpdate = webhookCallback(bot, "http");
+    // Increase timeout to 60s to allow for API calls
+    const handleUpdate = webhookCallback(bot, "http", {
+      timeoutMilliseconds: 55_000,
+    });
     const port = parseInt(env.PORT, 10);
 
     const server = createServer(async (req, res) => {
@@ -79,8 +86,12 @@ async function main() {
           await handleUpdate(req, res);
         } catch (error) {
           console.error("Webhook handling error:", error);
-          res.writeHead(500);
-          res.end();
+          // ALWAYS return 200 to Telegram — returning 500 causes
+          // Telegram to retry the same update in a loop
+          if (!res.headersSent) {
+            res.writeHead(200);
+            res.end();
+          }
         }
         return;
       }
