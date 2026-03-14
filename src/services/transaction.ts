@@ -71,6 +71,16 @@ export async function deleteLastTransaction(userId: string) {
   return last;
 }
 
+export async function deleteFileImportTransactions(userId: string): Promise<number> {
+  const result = await prisma.transaction.deleteMany({
+    where: {
+      userId,
+      rawMessage: { startsWith: "[file import]" },
+    },
+  });
+  return result.count;
+}
+
 export async function getTransactionsByCategory(userId: string, date?: Date) {
   const transactions = await getMonthlyTransactions(userId, date);
   const grouped = new Map<string, number>();

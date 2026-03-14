@@ -58,14 +58,16 @@ Return ONLY a JSON array of transactions, no explanation:
 ]
 
 Rules:
-- Map each row to a transaction if it contains financial data
-- Skip rows that are headers, totals, or non-financial
+- Map each row to EXACTLY ONE transaction — do NOT combine or split rows
+- Use the EXACT amount from the data — do NOT calculate, sum, or modify amounts
+- Skip rows that are headers, totals, subtotals, or non-financial
 - Use the closest matching category from the list
 - If date is missing, use "unknown"
 - If type is unclear, assume "expense" for negative/debit amounts and "income" for positive/credit amounts
 - Amount must always be positive
 - Currency: ${currency}
-- Support both English and Russian data`,
+- Support both English and Russian data
+- CRITICAL: Each transaction amount must match a single value from the original data`,
     messages: [
       {
         role: "user",
