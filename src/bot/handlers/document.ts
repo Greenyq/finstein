@@ -103,7 +103,7 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
         expiresAt: Date.now() + 10 * 60 * 1000,
       });
 
-      await ctx.reply(`📂 Found *${dataSheets[0]!.rows.length}* rows in "${dataSheets[0]!.sheetName}". Parsing...`, { parse_mode: "Markdown" });
+      await ctx.reply(`📂 Found *${dataSheets[0]!.rowCount}* rows in "${dataSheets[0]!.sheetName}". Parsing...`, { parse_mode: "Markdown" });
 
       // Process in background to avoid webhook timeout
       processInBackground(ctx.dbUser.id).catch((err) => {
@@ -115,7 +115,7 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
     // Multiple sheets — let user pick which to import
     let msg = `📂 *${fileName}*\nFound *${dataSheets.length}* data sheets:\n\n`;
     for (const s of dataSheets) {
-      msg += `• *${s.sheetName}* — ${s.rows.length} rows\n`;
+      msg += `• *${s.sheetName}* — ${s.rowCount} rows\n`;
     }
     msg += `\nWhich sheets to import?`;
 
@@ -185,7 +185,7 @@ export async function handleSheetSelect(ctx: AuthContext): Promise<void> {
   pending.sheets = selectedSheets;
 
   const names = selectedSheets.map((s) => s.sheetName).join(", ");
-  const totalRows = selectedSheets.reduce((s, sh) => s + sh.rows.length, 0);
+  const totalRows = selectedSheets.reduce((s, sh) => s + sh.rowCount, 0);
   await ctx.editMessageText(
     `📂 Parsing *${names}* (${totalRows} rows)...\nThis may take a moment.`,
     { parse_mode: "Markdown" }
@@ -213,7 +213,7 @@ async function processInBackground(userId: string): Promise<void> {
       debug += "🔍 *Here's what I see in the file:*\n\n";
       for (const s of sheets) {
         const preview = getSheetPreview(s, 3);
-        debug += `📄 *${s.sheetName}* (${s.rows.length} rows):\n\`\`\`\n${preview}\n\`\`\`\n`;
+        debug += `📄 *${s.sheetName}* (${s.rowCount} rows):\n\`\`\`\n${preview}\n\`\`\`\n`;
       }
       debug += "\nPlease check if this looks right. The file format may not be recognized.";
       await botInstance.api.sendMessage(chatId, debug, { parse_mode: "Markdown" });

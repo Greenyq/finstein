@@ -11,6 +11,9 @@ export interface SheetData {
   sheetName: string;
   rows: ParsedRow[];
   headers: string[];
+  /** Raw CSV text of the entire sheet — preserves grid layout for AI */
+  rawCsv: string;
+  rowCount: number;
 }
 
 export interface FileTransaction {
@@ -35,11 +38,18 @@ export function parseFileToSheets(buffer: Buffer, fileName: string): SheetData[]
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
 
-    const rows = XLSX.utils.sheet_to_json<ParsedRow>(sheet);
-    if (rows.length === 0) continue;
+    // Get raw CSV — preserves full grid layout including merged cells
+    const rawCsv = XLSX.utils.sheet_to_csv(sheet);
+    if (!rawCsv.trim()) continue;
 
-    const headers = Object.keys(rows[0]!);
-    sheets.push({ sheetName, rows, headers });
+    // Also get JSON for backward compat (used by parseFileToRows)
+    const rows = XLSX.utils.sheet_to_json<ParsedRow>(sheet);
+    const headers = rows.length > 0 ? Object.keys(rows[0]!) : [];
+
+    // Count non-empty lines for row count
+    const lines = rawCsv.split("\n").filter((l) => l.trim());
+
+    sheets.push({ sheetName, rows, headers, rawCsv, rowCount: lines.length });
   }
 
   return sheets;
@@ -52,30 +62,11 @@ export function parseFileToRows(buffer: Buffer, fileName: string): { rows: Parse
   return { rows: sheets[0]!.rows, headers: sheets[0]!.headers };
 }
 
-/** Get a preview of first N rows for debugging */
-export function getSheetPreview(sheet: SheetData, maxRows = 3): string {
-  const lines = [`Headers: ${sheet.headers.join(" | ")}`];
-  for (const row of sheet.rows.slice(0, maxRows)) {
-    const vals = sheet.headers.map((h) => {
-      const v = row[h];
-      return v !== undefined && v !== null ? String(v) : "";
-    });
-    lines.push(vals.join(" | "));
-  }
-  return lines.join("\n");
-}
-
-/** Convert rows to compact CSV-like string instead of JSON to save tokens */
-function rowsToCompactString(rows: ParsedRow[], headers: string[]): string {
-  const lines = [headers.join("|")];
-  for (const row of rows) {
-    const vals = headers.map((h) => {
-      const v = row[h];
-      return v !== undefined && v !== null ? String(v) : "";
-    });
-    lines.push(vals.join("|"));
-  }
-  return lines.join("\n");
+/** Get a preview of the raw CSV for debugging */
+export function getSheetPreview(sheet: SheetData, maxLines = 5): string {
+  const lines = sheet.rawCsv.split("\n").filter((l) => l.trim());
+  const preview = lines.slice(0, maxLines);
+  return preview.join("\n");
 }
 
 export async function extractTransactionsFromSheets(
@@ -91,31 +82,41 @@ export async function extractTransactionsFromSheets(
 
   // Process each sheet separately — each sheet is typically a month
   for (const sheet of sheets) {
-    const sampleSize = Math.min(sheet.rows.length, 100);
-    const sample = sheet.rows.slice(0, sampleSize);
-
-    // Convert to compact pipe-delimited format to save tokens
-    const compactData = rowsToCompactString(sample, sheet.headers);
+    // Use raw CSV — preserves full grid layout for complex spreadsheets
+    // Limit to ~150 lines to stay within token budget
+    const lines = sheet.rawCsv.split("\n");
+    const limitedCsv = lines.slice(0, 150).join("\n");
 
     let response;
     try {
       response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
-        system: `You are a financial data parser. Extract transactions from pipe-delimited data.
+        max_tokens: 4096,
+        system: `You are a financial data parser. Extract ALL individual transactions from spreadsheet data.
 
-Sheet: "${sheet.sheetName}" (this is the MONTH name, e.g. "Январь"=Jan, "Февраль"=Feb, "Март"=Mar). Year: ${year}.
+Sheet name: "${sheet.sheetName}" — this may indicate the month (e.g. "JAN"=January, "FEB"=February, "MAR"=March, "Январь"=January, etc.). Year: ${year}.
 
-Return ONLY a JSON array, no explanation:
+The data is CSV from a spreadsheet. It may have:
+- Header/title rows (skip these)
+- Summary/total rows (skip these)
+- Complex layouts with merged cells (look for the actual transaction data)
+- Multiple sections (income section, expense section, etc.)
+
+Return ONLY a JSON array of individual transactions:
 [{"type":"income"|"expense","amount":number,"category":"...","description":"...","date":"YYYY-MM-DD"}]
 
-Categories: ${JSON.stringify(categories)}
+Available categories: ${JSON.stringify(categories)}
 
-Rules: one row = one transaction. EXACT amounts from data. Skip totals/headers. Use sheet name for month. ${currency} currency.`,
+Rules:
+- Extract EVERY individual transaction row, not summaries or totals
+- Use EXACT amounts from the data
+- For dates: if specific dates are in the data, use them. Otherwise use the sheet name as month + day 1
+- Classify each as income or expense based on context
+- ${currency} currency`,
         messages: [
           {
             role: "user",
-            content: compactData,
+            content: limitedCsv,
           },
         ],
       });
@@ -129,18 +130,18 @@ Rules: one row = one transaction. EXACT amounts from data. Skip totals/headers. 
         try {
           response = await client.messages.create({
             model: "claude-haiku-4-5-20251001",
-            max_tokens: 2048,
-            system: `You are a financial data parser. Extract transactions from pipe-delimited data.
+            max_tokens: 4096,
+            system: `You are a financial data parser. Extract ALL individual transactions from CSV spreadsheet data.
 
-Sheet: "${sheet.sheetName}" (this is the MONTH name). Year: ${year}.
+Sheet: "${sheet.sheetName}" (month name). Year: ${year}.
 
 Return ONLY a JSON array:
 [{"type":"income"|"expense","amount":number,"category":"...","description":"...","date":"YYYY-MM-DD"}]
 
 Categories: ${JSON.stringify(categories)}
 
-Rules: one row = one transaction. EXACT amounts. Skip totals. Use sheet name for month. ${currency}.`,
-            messages: [{ role: "user", content: compactData }],
+Rules: extract every individual transaction. EXACT amounts. Skip totals/headers. ${currency} currency.`,
+            messages: [{ role: "user", content: limitedCsv }],
           });
         } catch (retryErr) {
           const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
