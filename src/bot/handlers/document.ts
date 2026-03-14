@@ -1,5 +1,5 @@
 import type { AuthContext } from "../middleware/auth.js";
-import { parseFileToRows, extractTransactionsFromFile, type FileTransaction } from "../../services/fileImport.js";
+import { parseFileToSheets, extractTransactionsFromSheets, type FileTransaction } from "../../services/fileImport.js";
 import { createTransaction } from "../../services/transaction.js";
 import { clearReportCache } from "../commands/report.js";
 import { formatCurrency } from "../../utils/formatting.js";
@@ -51,58 +51,57 @@ export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
 
     const buffer = Buffer.from(await response.arrayBuffer());
 
-    const { rows, headers } = parseFileToRows(buffer, fileName);
+    const sheets = parseFileToSheets(buffer, fileName);
 
-    if (rows.length === 0) {
+    if (sheets.length === 0) {
       await ctx.reply("The file appears to be empty or has no data rows.");
       return;
     }
 
-    await ctx.reply(`Found *${rows.length}* rows. Parsing transactions...`, { parse_mode: "Markdown" });
+    const totalRows = sheets.reduce((sum, s) => sum + s.rows.length, 0);
+    const sheetNames = sheets.map((s) => s.sheetName).join(", ");
+    await ctx.reply(
+      `Found *${sheets.length}* sheet(s): _${sheetNames}_\n*${totalRows}* total rows. Parsing...`,
+      { parse_mode: "Markdown" }
+    );
 
-    // Extract transactions from file (one API call)
-    const transactions = await extractTransactionsFromFile(rows, headers, ctx.dbUser.currency);
+    // Extract transactions from each sheet separately
+    const transactions = await extractTransactionsFromSheets(sheets, ctx.dbUser.currency);
 
     if (transactions.length === 0) {
       await ctx.reply("No financial transactions found in this file.");
       return;
     }
 
-    // Build preview of parsed transactions
-    const byCategory = new Map<string, { count: number; total: number; type: string }>();
-    let totalIncome = 0;
-    let totalExpense = 0;
+    // Build preview grouped by sheet (month)
+    let preview = `📋 *Parsed ${transactions.length} transactions:*\n`;
 
+    // Group by sheet
+    const bySheet = new Map<string, FileTransaction[]>();
     for (const t of transactions) {
-      const key = t.category;
-      const existing = byCategory.get(key) ?? { count: 0, total: 0, type: t.type };
-      existing.count++;
-      existing.total += t.amount;
-      byCategory.set(key, existing);
-
-      if (t.type === "income") totalIncome += t.amount;
-      else totalExpense += t.amount;
+      const key = t.sheetName ?? "Unknown";
+      const list = bySheet.get(key) ?? [];
+      list.push(t);
+      bySheet.set(key, list);
     }
 
-    let preview = `📋 *Parsed ${transactions.length} transactions from file:*\n\n`;
+    for (const [sheet, txns] of bySheet) {
+      const income = txns.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const expense = txns.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
 
-    if (totalIncome > 0) {
-      preview += `💰 *Income:* ${formatCurrency(totalIncome)}\n`;
-      for (const [cat, data] of byCategory) {
-        if (data.type === "income") {
-          preview += `  • ${cat}: ${formatCurrency(data.total)} (${data.count}x)\n`;
-        }
+      preview += `\n📅 *${sheet}* (${txns.length} txns)\n`;
+      if (income > 0) preview += `  💰 Income: ${formatCurrency(income)}\n`;
+      preview += `  💸 Expenses: ${formatCurrency(expense)}\n`;
+
+      // Category breakdown per sheet
+      const byCategory = new Map<string, number>();
+      for (const t of txns.filter((t) => t.type === "expense")) {
+        byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
       }
-      preview += "\n";
-    }
-
-    preview += `💸 *Expenses:* ${formatCurrency(totalExpense)}\n`;
-    const sortedExpenses = Array.from(byCategory.entries())
-      .filter(([, d]) => d.type === "expense")
-      .sort((a, b) => b[1].total - a[1].total);
-
-    for (const [cat, data] of sortedExpenses) {
-      preview += `  • ${cat}: ${formatCurrency(data.total)} (${data.count}x)\n`;
+      const sorted = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
+      for (const [cat, amount] of sorted.slice(0, 5)) {
+        preview += `    • ${cat}: ${formatCurrency(amount)}\n`;
+      }
     }
 
     preview += `\n⚠️ *Check the amounts above.* Save to database?`;
