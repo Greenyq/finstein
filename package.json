@@ -19,13 +19,13 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.78.0",
     "@prisma/client": "^6.3.0",
+    "dotenv": "^16.4.7",
     "grammy": "^1.35.0",
     "node-cron": "^3.0.3",
-    "openai": "^4.85.0",
-    "zod": "^3.24.0",
-    "dotenv": "^16.4.7"
+    "openai": "^6.29.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

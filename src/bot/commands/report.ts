@@ -2,15 +2,26 @@ import type { AuthContext } from "../middleware/auth.js";
 import { getComparisonData, getFixedExpenses } from "../../services/budget.js";
 import { analyzeFinances } from "../../agents/analyzer.js";
 import { generateAdvice } from "../../agents/advisor.js";
+import { getFamilyMemberIds } from "../../services/family.js";
+import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 
 const reportCache = new Map<string, { advice: string; cachedAt: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 export async function reportCommand(ctx: AuthContext): Promise<void> {
+  if (!requirePremium(ctx, "report")) {
+    await sendPremiumPrompt(ctx, "report");
+    return;
+  }
+
   const userId = ctx.dbUser.id;
+  const memberIds = await getFamilyMemberIds(userId);
+  const isFamily = memberIds.length > 1;
+  const queryIds = isFamily ? memberIds : userId;
 
   // Check cache
-  const cached = reportCache.get(userId);
+  const cacheKey = isFamily ? `family:${ctx.dbUser.familyId}` : userId;
+  const cached = reportCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
     await ctx.reply(cached.advice, { parse_mode: "Markdown" });
     return;
@@ -19,7 +30,7 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
   await ctx.reply("Analyzing your finances... This takes a moment.");
 
   try {
-    const comparison = await getComparisonData(userId);
+    const comparison = await getComparisonData(queryIds);
     const fixedExpenses = await getFixedExpenses(userId);
 
     if (comparison.currentMonth.transactionCount === 0) {
@@ -45,7 +56,7 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
     const advice = await generateAdvice(analysis);
 
     // Cache result
-    reportCache.set(userId, { advice, cachedAt: Date.now() });
+    reportCache.set(cacheKey, { advice, cachedAt: Date.now() });
 
     await ctx.reply(advice, { parse_mode: "Markdown" });
   } catch (error) {

@@ -10,6 +10,9 @@ import { setupCommand } from "./commands/setup.js";
 import { historyCommand } from "./commands/history.js";
 import { undoCommand } from "./commands/undo.js";
 import { helpCommand } from "./commands/help.js";
+import { familyCommand } from "./commands/family.js";
+import { joinCommand } from "./commands/join.js";
+import { leaveCommand } from "./commands/leave.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
@@ -30,6 +33,9 @@ bot.command("report", (ctx) => reportCommand(ctx as AuthContext));
 bot.command("setup", (ctx) => setupCommand(ctx as AuthContext));
 bot.command("history", (ctx) => historyCommand(ctx as AuthContext));
 bot.command("undo", (ctx) => undoCommand(ctx as AuthContext));
+bot.command("family", (ctx) => familyCommand(ctx as AuthContext));
+bot.command("join", (ctx) => joinCommand(ctx as AuthContext));
+bot.command("leave", (ctx) => leaveCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx));
 
 // Message handlers

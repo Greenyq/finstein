@@ -5,10 +5,13 @@ export async function helpCommand(ctx: Context): Promise<void> {
     `*FinAdvisor — Commands*\n\n` +
       `/start — Welcome & onboarding\n` +
       `/status — Current month snapshot\n` +
-      `/report — Full AI analysis & recommendations\n` +
+      `/report — Full AI analysis & recommendations ⭐\n` +
       `/setup — Configure income & fixed expenses\n` +
       `/history — Last 10 transactions\n` +
       `/undo — Remove last transaction\n` +
+      `/family — Create family budget & invite code ⭐\n` +
+      `/join CODE — Join a family budget\n` +
+      `/leave — Leave family budget\n` +
       `/help — Show this message\n\n` +
       `*How to track:*\n` +
       `Just send a message naturally:\n` +

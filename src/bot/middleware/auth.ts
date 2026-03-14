@@ -36,5 +36,9 @@ export type AuthContext = Context & {
     currency: string;
     timezone: string;
     monthlyIncome: number;
+    familyId: string | null;
+    role: string;
+    isPremium: boolean;
+    familyPlan: boolean;
   };
 };

@@ -1,6 +1,7 @@
 import { prisma } from "../db/prisma.js";
 import { getMonthlyTransactions, getLastMonthTransactions } from "./transaction.js";
 import { findCategoryGroup } from "../utils/categories.js";
+import { getMonthRange } from "../utils/formatting.js";
 
 export interface MonthSummary {
   totalIncome: number;
@@ -14,7 +15,7 @@ export interface MonthSummary {
   categoryBreakdown: Array<{ category: string; amount: number; group: string }>;
 }
 
-export async function getMonthSummary(userId: string, date?: Date): Promise<MonthSummary> {
+export async function getMonthSummary(userId: string | string[], date?: Date): Promise<MonthSummary> {
   const transactions = await getMonthlyTransactions(userId, date);
 
   let totalIncome = 0;
@@ -60,7 +61,7 @@ export async function getMonthSummary(userId: string, date?: Date): Promise<Mont
   };
 }
 
-export async function getComparisonData(userId: string) {
+export async function getComparisonData(userId: string | string[]) {
   const currentMonth = await getMonthSummary(userId);
   const lastMonthTransactions = await getLastMonthTransactions(userId);
 
@@ -94,6 +95,35 @@ export async function getComparisonData(userId: string) {
     },
     trends,
   };
+}
+
+export async function getPersonBreakdown(userIds: string[], date?: Date): Promise<Array<{ userId: string; firstName: string; totalExpenses: number }>> {
+  const { start, end } = getMonthRange(date);
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, firstName: true },
+  });
+
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      userId: { in: userIds },
+      type: "expense",
+      date: { gte: start, lte: end },
+    },
+    select: { userId: true, amount: true },
+  });
+
+  const totals = new Map<string, number>();
+  for (const t of transactions) {
+    totals.set(t.userId, (totals.get(t.userId) ?? 0) + t.amount);
+  }
+
+  return users.map((u) => ({
+    userId: u.id,
+    firstName: u.firstName,
+    totalExpenses: totals.get(u.id) ?? 0,
+  }));
 }
 
 export async function getFixedExpenses(userId: string) {

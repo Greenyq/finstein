@@ -37,6 +37,7 @@ export async function handleTextMessage(ctx: AuthContext): Promise<void> {
       category: result.category,
       subcategory: result.subcategory ?? undefined,
       description: result.description,
+      authorName: ctx.dbUser.firstName,
       date: new Date(result.date),
       rawMessage: text,
     });

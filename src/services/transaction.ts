@@ -8,6 +8,7 @@ interface CreateTransactionInput {
   category: string;
   subcategory?: string;
   description?: string;
+  authorName?: string;
   date?: Date;
   rawMessage?: string;
 }
@@ -21,28 +22,31 @@ export async function createTransaction(input: CreateTransactionInput) {
       category: input.category,
       subcategory: input.subcategory ?? null,
       description: input.description ?? null,
+      authorName: input.authorName ?? null,
       date: input.date ?? new Date(),
       rawMessage: input.rawMessage ?? null,
     },
   });
 }
 
-export async function getMonthlyTransactions(userId: string, date?: Date) {
+export async function getMonthlyTransactions(userId: string | string[], date?: Date) {
   const { start, end } = getMonthRange(date);
+  const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
     where: {
-      userId,
+      userId: userFilter,
       date: { gte: start, lte: end },
     },
     orderBy: { date: "desc" },
   });
 }
 
-export async function getLastMonthTransactions(userId: string) {
+export async function getLastMonthTransactions(userId: string | string[]) {
   const { start, end } = getLastMonthRange();
+  const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
     where: {
-      userId,
+      userId: userFilter,
       date: { gte: start, lte: end },
     },
     orderBy: { date: "desc" },
