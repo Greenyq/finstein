@@ -1,8 +1,8 @@
 import type { AuthContext } from "../middleware/auth.js";
 import { parseFileToSheets, extractTransactionsFromSheets, getSheetPreview, type FileTransaction, type SheetData } from "../../services/fileImport.js";
-import { createTransaction } from "../../services/transaction.js";
+import { createTransaction, countFileImportsByMonth, deleteFileImportsByMonth } from "../../services/transaction.js";
 import { clearReportCache } from "../commands/report.js";
-import { formatCurrency } from "../../utils/formatting.js";
+import { formatCurrency, getMonthRange } from "../../utils/formatting.js";
 import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 import { InlineKeyboard } from "grammy";
 import type { Bot } from "grammy";
@@ -16,6 +16,8 @@ const SKIP_SHEETS = /dashboard|summary|total|итого|сводка|overview/i;
 interface PendingImport {
   transactions: FileTransaction[];
   fileName: string;
+  /** Months that have existing file imports — will be replaced on confirm */
+  duplicateMonths?: Array<{ start: Date; end: Date }>;
   expiresAt: number;
 }
 
@@ -264,6 +266,23 @@ async function processInBackground(userId: string): Promise<void> {
       return;
     }
 
+    // Check for duplicate imports — find which months already have file-imported data
+    const txMonths = new Set<string>();
+    for (const t of transactions) {
+      if (t.date) {
+        const d = new Date(t.date);
+        if (!isNaN(d.getTime())) {
+          txMonths.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }
+      }
+    }
+    const monthRanges = Array.from(txMonths).map((key) => {
+      const [y, m] = key.split("-").map(Number) as [number, number];
+      return getMonthRange(new Date(y, m - 1, 1));
+    });
+    const existingCounts = await countFileImportsByMonth(userId, monthRanges);
+    const duplicateMonths = existingCounts.size > 0 ? monthRanges : undefined;
+
     // Build preview grouped by sheet
     let preview = `📋 *Parsed ${transactions.length} transactions:*\n`;
 
@@ -295,17 +314,32 @@ async function processInBackground(userId: string): Promise<void> {
       }
     }
 
-    preview += `\n⚠️ *Check the amounts above.* Save to database?`;
+    if (existingCounts.size > 0) {
+      const total = Array.from(existingCounts.values()).reduce((a, b) => a + b, 0);
+      const monthNames = Array.from(existingCounts.entries())
+        .map(([k, c]) => `${k} (${c} txns)`)
+        .join(", ");
+      preview += `\n⚠️ *Duplicate warning:* ${total} existing file-imported transactions found for: ${monthNames}.\n`;
+      preview += `"Replace" will delete old imports first.\n`;
+    }
+
+    preview += `\n*Check the amounts above.* Save to database?`;
 
     pendingImports.set(userId, {
       transactions,
       fileName,
+      duplicateMonths,
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
-    const keyboard = new InlineKeyboard()
-      .text("✅ Save", "file_import_confirm")
-      .text("❌ Cancel", "file_import_cancel");
+    const keyboard = new InlineKeyboard();
+    if (existingCounts.size > 0) {
+      keyboard.text("🔄 Replace", "file_import_replace");
+      keyboard.text("➕ Add", "file_import_confirm");
+    } else {
+      keyboard.text("✅ Save", "file_import_confirm");
+    }
+    keyboard.text("❌ Cancel", "file_import_cancel");
 
     await botInstance.api.sendMessage(chatId, preview, {
       parse_mode: "Markdown",
@@ -364,6 +398,66 @@ export async function handleFileImportConfirm(ctx: AuthContext): Promise<void> {
   clearReportCache(ctx.dbUser.id);
 
   let reply = `✅ *Imported ${saved} transactions!*\n`;
+  if (skipped > 0) reply += `(${skipped} skipped)\n`;
+  reply += `\n💰 Income: *${formatCurrency(totalIncome)}*`;
+  reply += `\n💸 Expenses: *${formatCurrency(totalExpense)}*`;
+  reply += `\n\nUse /report for your updated overview.`;
+
+  await ctx.editMessageText(reply, { parse_mode: "Markdown" });
+}
+
+export async function handleFileImportReplace(ctx: AuthContext): Promise<void> {
+  const pending = pendingImports.get(ctx.dbUser.id);
+
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingImports.delete(ctx.dbUser.id);
+    await ctx.answerCallbackQuery("Import expired. Please re-upload the file.");
+    return;
+  }
+
+  await ctx.answerCallbackQuery("Replacing...");
+
+  const { transactions, fileName, duplicateMonths } = pending;
+  pendingImports.delete(ctx.dbUser.id);
+
+  // Delete old file imports for the affected months
+  let deleted = 0;
+  if (duplicateMonths && duplicateMonths.length > 0) {
+    deleted = await deleteFileImportsByMonth(ctx.dbUser.id, duplicateMonths);
+  }
+
+  let saved = 0;
+  let skipped = 0;
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  for (const t of transactions) {
+    try {
+      const date = t.date && t.date !== "unknown" ? new Date(t.date) : new Date();
+      if (isNaN(date.getTime())) continue;
+
+      await createTransaction({
+        userId: ctx.dbUser.id,
+        type: t.type,
+        amount: t.amount,
+        category: t.category,
+        description: t.description,
+        authorName: ctx.dbUser.firstName,
+        date,
+        rawMessage: `[file import] ${fileName}`,
+      });
+
+      if (t.type === "income") totalIncome += t.amount;
+      else totalExpense += t.amount;
+      saved++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  clearReportCache(ctx.dbUser.id);
+
+  let reply = `🔄 *Replaced ${deleted} old → imported ${saved} new transactions!*\n`;
   if (skipped > 0) reply += `(${skipped} skipped)\n`;
   reply += `\n💰 Income: *${formatCurrency(totalIncome)}*`;
   reply += `\n💸 Expenses: *${formatCurrency(totalExpense)}*`;

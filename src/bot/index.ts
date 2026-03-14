@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { getEnv } from "../utils/env.js";
 import { authMiddleware, type AuthContext } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rateLimit.js";
-import { startCommand } from "./commands/start.js";
+import { startCommand, handleOnboardCallback } from "./commands/start.js";
 import { statusCommand } from "./commands/status.js";
 import { reportCommand } from "./commands/report.js";
 import { setupCommand } from "./commands/setup.js";
@@ -14,10 +14,14 @@ import { clearImportCommand } from "./commands/clearimport.js";
 import { familyCommand } from "./commands/family.js";
 import { joinCommand } from "./commands/join.js";
 import { leaveCommand } from "./commands/leave.js";
+import { inviteCommand } from "./commands/invite.js";
+import { limitCommand } from "./commands/limit.js";
+import { recurringCommand } from "./commands/recurring.js";
+import { exportCommand } from "./commands/export.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
-import { handleDocumentMessage, handleFileImportConfirm, handleFileImportCancel, handleSheetToggle, handleSheetImportGo, setDocumentBotInstance } from "./handlers/document.js";
+import { handleDocumentMessage, handleFileImportConfirm, handleFileImportReplace, handleFileImportCancel, handleSheetToggle, handleSheetImportGo, setDocumentBotInstance } from "./handlers/document.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -38,6 +42,10 @@ bot.command("undo", (ctx) => undoCommand(ctx as AuthContext));
 bot.command("family", (ctx) => familyCommand(ctx as AuthContext));
 bot.command("join", (ctx) => joinCommand(ctx as AuthContext));
 bot.command("leave", (ctx) => leaveCommand(ctx as AuthContext));
+bot.command("invite", (ctx) => inviteCommand(ctx as AuthContext));
+bot.command("limit", (ctx) => limitCommand(ctx as AuthContext));
+bot.command("recurring", (ctx) => recurringCommand(ctx as AuthContext));
+bot.command("export", (ctx) => exportCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
 
@@ -46,7 +54,9 @@ setDocumentBotInstance(bot);
 
 // Callback query handlers (inline buttons)
 bot.callbackQuery("file_import_confirm", (ctx) => handleFileImportConfirm(ctx as AuthContext));
+bot.callbackQuery("file_import_replace", (ctx) => handleFileImportReplace(ctx as AuthContext));
 bot.callbackQuery("file_import_cancel", (ctx) => handleFileImportCancel(ctx as AuthContext));
+bot.callbackQuery(/^onboard_/, (ctx) => handleOnboardCallback(ctx));
 bot.callbackQuery(/^sheet_toggle_/, (ctx) => handleSheetToggle(ctx as AuthContext));
 bot.callbackQuery("sheet_import_go", (ctx) => handleSheetImportGo(ctx as AuthContext));
 

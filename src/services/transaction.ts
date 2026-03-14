@@ -93,6 +93,45 @@ export async function deleteFileImportTransactions(userId: string): Promise<numb
   return result.count;
 }
 
+/** Count file-imported transactions for specific months */
+export async function countFileImportsByMonth(
+  userId: string,
+  months: Array<{ start: Date; end: Date }>
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  for (const { start, end } of months) {
+    const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+    const count = await prisma.transaction.count({
+      where: {
+        userId,
+        rawMessage: { startsWith: "[file import]" },
+        date: { gte: start, lte: end },
+      },
+    });
+    if (count > 0) counts.set(key, count);
+  }
+  return counts;
+}
+
+/** Delete file-imported transactions for specific months */
+export async function deleteFileImportsByMonth(
+  userId: string,
+  months: Array<{ start: Date; end: Date }>
+): Promise<number> {
+  let total = 0;
+  for (const { start, end } of months) {
+    const result = await prisma.transaction.deleteMany({
+      where: {
+        userId,
+        rawMessage: { startsWith: "[file import]" },
+        date: { gte: start, lte: end },
+      },
+    });
+    total += result.count;
+  }
+  return total;
+}
+
 export async function getTransactionsByCategory(userId: string, date?: Date) {
   const transactions = await getMonthlyTransactions(userId, date);
   const grouped = new Map<string, number>();

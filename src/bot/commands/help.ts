@@ -2,24 +2,33 @@ import type { Context } from "grammy";
 
 export async function helpCommand(ctx: Context): Promise<void> {
   await ctx.reply(
-    `*FinAdvisor — Commands*\n\n` +
-      `/start — Welcome & onboarding\n` +
-      `/status — Current month snapshot\n` +
-      `/report — Full AI analysis & recommendations ⭐\n` +
-      `/setup — Configure income & fixed expenses\n` +
-      `/history — Last 10 transactions\n` +
-      `/undo — Remove last transaction\n` +
-      `/family — Create family budget & invite code ⭐\n` +
-      `/join CODE — Join a family budget\n` +
-      `/leave — Leave family budget\n` +
-      `/help — Show this message\n\n` +
-      `*How to track:*\n` +
-      `Just send a message naturally:\n` +
-      `• _"spent 45 on groceries"_\n` +
-      `• _"got paycheck 2180"_\n` +
-      `• _"restaurant 35"_\n` +
-      `• Or send a voice message!\n` +
-      `• Send a CSV/Excel file to analyze past finances ⭐`,
+    `*Finstein — Команды*\n\n` +
+      `*Финансы:*\n` +
+      `/status — сводка за текущий месяц\n` +
+      `/report — AI-анализ и рекомендации\n` +
+      `/history — последние транзакции\n` +
+      `/undo — отменить последнюю запись\n\n` +
+      `*Бюджет:*\n` +
+      `/limit — лимиты по категориям\n` +
+      `/recurring — автоматические расходы (ипотека, подписки)\n` +
+      `/setup — настройки дохода\n\n` +
+      `*Семья и данные:*\n` +
+      `/invite — пригласить в семейный бюджет\n` +
+      `/join CODE — присоединиться к семье\n` +
+      `/leave — выйти из семьи\n` +
+      `/export — экспорт в Excel\n\n` +
+      `*Как записывать:*\n` +
+      `Просто напишите сообщение:\n` +
+      `• _"продукты 850"_\n` +
+      `• _"зарплата 3500"_\n` +
+      `• _"restaurant 45"_\n` +
+      `• Голосовое сообщение\n` +
+      `• Фото чека\n` +
+      `• Excel/CSV файл\n\n` +
+      `*Вопросы:*\n` +
+      `• _"сколько потратили на продукты?"_\n` +
+      `• _"покажи за 2 месяца траты"_\n` +
+      `• _"какой баланс?"_`,
     { parse_mode: "Markdown" }
   );
 }

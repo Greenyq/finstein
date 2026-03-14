@@ -6,6 +6,13 @@ import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
+import { checkBudgetLimits } from "../commands/limit.js";
+
+/** Detect if text is primarily Russian (has Cyrillic chars) */
+function isRussian(text: string): boolean {
+  const cyrillic = text.match(/[\u0400-\u04FF]/g);
+  return !!cyrillic && cyrillic.length > text.replace(/\s/g, "").length * 0.3;
+}
 
 export async function handleTextMessage(ctx: AuthContext, textOverride?: string): Promise<void> {
   const text = (textOverride ?? ctx.message?.text)?.trim();
@@ -18,14 +25,25 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   const handled = await handleSetupMessage(ctx);
   if (handled) return;
 
+  const ru = isRussian(text);
+
   // Pre-filter: skip obviously non-financial messages to save API tokens
   if (!isLikelyFinancial(text)) {
-    await ctx.reply(
-      "I'm your finance assistant — send me expenses or income.\n" +
-        '_Example: "spent 45 on groceries"_\n\n' +
-        "Use /help to see all commands.",
-      { parse_mode: "Markdown" }
-    );
+    if (ru) {
+      await ctx.reply(
+        "Я ваш финансовый помощник — отправьте мне расходы или доходы.\n" +
+          '_Например: "потратил 45 на продукты"_\n\n' +
+          "Используйте /help для списка команд.",
+        { parse_mode: "Markdown" }
+      );
+    } else {
+      await ctx.reply(
+        "I'm your finance assistant — send me expenses or income.\n" +
+          '_Example: "spent 45 on groceries"_\n\n' +
+          "Use /help to see all commands.",
+        { parse_mode: "Markdown" }
+      );
+    }
     return;
   }
 
@@ -33,22 +51,32 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     const result = await parseMessage(text);
 
     if (result.type === "unknown") {
-      await ctx.reply(
-        "I didn't catch that — try something like:\n" +
-          '_"spent 45 on groceries"_\n' +
-          '_"got paycheck 2180"_\n' +
-          '_"restaurant 35"_',
-        { parse_mode: "Markdown" }
-      );
+      if (ru) {
+        await ctx.reply(
+          "Не понял — попробуйте что-то вроде:\n" +
+            '_"потратил 45 на продукты"_\n' +
+            '_"зарплата 2180"_\n' +
+            '_"ресторан 35"_',
+          { parse_mode: "Markdown" }
+        );
+      } else {
+        await ctx.reply(
+          "I didn't catch that — try something like:\n" +
+            '_"spent 45 on groceries"_\n' +
+            '_"got paycheck 2180"_\n' +
+            '_"restaurant 35"_',
+          { parse_mode: "Markdown" }
+        );
+      }
       return;
     }
 
     if (result.type === "query") {
-      await handleQuery(ctx, result);
+      await handleQuery(ctx, result, ru);
       return;
     }
 
-    const transaction = await createTransaction({
+    await createTransaction({
       userId: ctx.dbUser.id,
       type: result.type,
       amount: result.amount,
@@ -65,16 +93,26 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
     const emoji = result.type === "income" ? "💰" : "✅";
 
-    let reply = `${emoji} Recorded: *${formatCurrency(result.amount)}* — ${result.category}`;
-    if (result.description) {
-      reply += `\n_${result.description}_`;
-    }
-
-    if (result.confidence < 0.7) {
-      reply += `\n\n⚠️ I wasn't fully sure about this. Use /undo if it's wrong.`;
+    let reply: string;
+    if (ru) {
+      reply = `${emoji} Записано: *${formatCurrency(result.amount)}* — ${result.category}`;
+      if (result.description) reply += `\n_${result.description}_`;
+      if (result.confidence < 0.7) reply += `\n\n⚠️ Не совсем уверен. Используйте /undo если ошибка.`;
+    } else {
+      reply = `${emoji} Recorded: *${formatCurrency(result.amount)}* — ${result.category}`;
+      if (result.description) reply += `\n_${result.description}_`;
+      if (result.confidence < 0.7) reply += `\n\n⚠️ I wasn't fully sure about this. Use /undo if it's wrong.`;
     }
 
     await ctx.reply(reply, { parse_mode: "Markdown" });
+
+    // Check budget limits after recording an expense
+    if (result.type === "expense") {
+      const warning = await checkBudgetLimits(ctx.dbUser.id, result.category, result.amount);
+      if (warning) {
+        await ctx.reply(warning, { parse_mode: "Markdown" });
+      }
+    }
   } catch (error) {
     console.error("Message handling failed:", {
       userId: ctx.dbUser.id,
@@ -82,12 +120,14 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       error,
     });
     await ctx.reply(
-      "Sorry, something went wrong processing your message. Please try again."
+      ru
+        ? "Произошла ошибка. Попробуйте ещё раз."
+        : "Sorry, something went wrong processing your message. Please try again."
     );
   }
 }
 
-async function handleQuery(ctx: AuthContext, query: ParsedQuery): Promise<void> {
+async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Promise<void> {
   const userId = ctx.dbUser.id;
 
   // Get transactions based on period
@@ -96,19 +136,23 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery): Promise<void> 
 
   if (query.months && query.months > 1) {
     transactions = await getLastNMonthsTransactions(userId, query.months);
-    periodLabel = `${query.months} months`;
+    periodLabel = ru ? `${query.months} мес.` : `${query.months} months`;
   } else if (query.period === "last_month") {
     transactions = await getLastMonthTransactions(userId);
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
-    periodLabel = lastMonth.toLocaleString("ru-RU", { month: "long" });
+    periodLabel = lastMonth.toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
   } else {
     transactions = await getMonthlyTransactions(userId);
-    periodLabel = new Date().toLocaleString("ru-RU", { month: "long" });
+    periodLabel = new Date().toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
   }
 
   if (transactions.length === 0) {
-    await ctx.reply(`No transactions found for ${periodLabel}. Start by recording some expenses!`);
+    await ctx.reply(
+      ru
+        ? `Нет транзакций за ${periodLabel}. Начните с записи расходов!`
+        : `No transactions found for ${periodLabel}. Start by recording some expenses!`
+    );
     return;
   }
 
@@ -132,18 +176,26 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery): Promise<void> 
   let reply = "";
 
   if (query.queryType === "income") {
-    reply = `💰 *Income for ${periodLabel}*: ${formatCurrency(totalIncome)}`;
+    reply = ru
+      ? `💰 *Доход за ${periodLabel}*: ${formatCurrency(totalIncome)}`
+      : `💰 *Income for ${periodLabel}*: ${formatCurrency(totalIncome)}`;
     if (query.category) reply += ` (${query.category})`;
-    reply += `\n_${filtered.filter((t) => t.type === "income").length} transactions_`;
+    const count = filtered.filter((t) => t.type === "income").length;
+    reply += ru ? `\n_${count} транзакций_` : `\n_${count} transactions_`;
   } else if (query.queryType === "balance") {
     const balance = totalIncome - totalExpenses;
-    reply = `📊 *Balance for ${periodLabel}*\n`;
-    reply += `💰 Income: ${formatCurrency(totalIncome)}\n`;
-    reply += `💸 Expenses: ${formatCurrency(totalExpenses)}\n`;
-    reply += `${balance >= 0 ? "✅" : "⚠️"} Net: *${formatCurrency(balance)}*`;
+    reply = ru
+      ? `📊 *Баланс за ${periodLabel}*\n`
+      : `📊 *Balance for ${periodLabel}*\n`;
+    reply += ru
+      ? `💰 Доход: ${formatCurrency(totalIncome)}\n💸 Расходы: ${formatCurrency(totalExpenses)}\n`
+      : `💰 Income: ${formatCurrency(totalIncome)}\n💸 Expenses: ${formatCurrency(totalExpenses)}\n`;
+    reply += `${balance >= 0 ? "✅" : "⚠️"} ${ru ? "Итого" : "Net"}: *${formatCurrency(balance)}*`;
   } else {
     // spending or summary
-    reply = `💸 *Expenses for ${periodLabel}*`;
+    reply = ru
+      ? `💸 *Расходы за ${periodLabel}*`
+      : `💸 *Expenses for ${periodLabel}*`;
     if (query.category) reply += ` — ${query.category}`;
     reply += `: *${formatCurrency(totalExpenses)}*\n`;
 
@@ -172,7 +224,8 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery): Promise<void> 
       }
     }
 
-    reply += `\n_${filtered.filter((t) => t.type === "expense").length} transactions_`;
+    const count = filtered.filter((t) => t.type === "expense").length;
+    reply += ru ? `\n_${count} транзакций_` : `\n_${count} transactions_`;
   }
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
