@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./finbot.db"
+}
+
+model User {
+  id            String         @id @default(cuid())
+  telegramId    BigInt         @unique
+  firstName     String
+  currency      String         @default("CAD")
+  timezone      String         @default("America/Winnipeg")
+  monthlyIncome Float          @default(0)
+  transactions  Transaction[]
+  fixedExpenses FixedExpense[]
+  goals         Goal[]
+  createdAt     DateTime       @default(now())
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // "income" | "expense"
+  amount      Float
+  category    String
+  subcategory String?
+  description String?
+  date        DateTime @default(now())
+  rawMessage  String?
+  createdAt   DateTime @default(now())
+}
+
+model FixedExpense {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id])
+  name       String
+  amount     Float
+  category   String
+  dayOfMonth Int?
+  isActive   Boolean @default(true)
+}
+
+model Goal {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  deadline      DateTime?
+  isActive      Boolean   @default(true)
+}
