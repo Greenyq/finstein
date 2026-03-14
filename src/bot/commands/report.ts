@@ -66,5 +66,12 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
 }
 
 export function clearReportCache(userId: string): void {
+  // Clear both individual and any family cache entries
   reportCache.delete(userId);
+  // Also clear family entries that might contain this user
+  for (const key of reportCache.keys()) {
+    if (key.startsWith("family:")) {
+      reportCache.delete(key);
+    }
+  }
 }

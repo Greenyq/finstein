@@ -16,6 +16,8 @@ export interface ParsedQuery {
   type: "query";
   category: string | null;
   period: "current_month" | "last_month" | "all";
+  /** Number of months to include (e.g. 2 = current + last month). Defaults to 1. */
+  months?: number;
   queryType: "spending" | "income" | "balance" | "summary";
   rawMessage: string;
 }
@@ -59,6 +61,7 @@ export async function parseMessage(message: string): Promise<ParserResult> {
       type: "query",
       category: parsed.category ? String(parsed.category) : null,
       period: (parsed.period as ParsedQuery["period"]) ?? "current_month",
+      months: parsed.months ? Number(parsed.months) : undefined,
       queryType: (parsed.queryType as ParsedQuery["queryType"]) ?? "summary",
       rawMessage: String(parsed.rawMessage ?? message),
     };

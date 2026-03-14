@@ -1,7 +1,7 @@
 import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
 import type { ParsedQuery } from "../../agents/parser.js";
-import { createTransaction, getMonthlyTransactions, getLastMonthTransactions } from "../../services/transaction.js";
+import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
@@ -94,7 +94,10 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery): Promise<void> 
   let transactions;
   let periodLabel: string;
 
-  if (query.period === "last_month") {
+  if (query.months && query.months > 1) {
+    transactions = await getLastNMonthsTransactions(userId, query.months);
+    periodLabel = `${query.months} months`;
+  } else if (query.period === "last_month") {
     transactions = await getLastMonthTransactions(userId);
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
