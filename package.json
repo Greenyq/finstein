@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "tsx watch src/bot/index.ts",
     "start": "node dist/bot/index.js",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "build:render": "npm install && prisma generate && tsc && prisma db push --skip-generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

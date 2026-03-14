@@ -7,9 +7,11 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
   ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
-  DATABASE_URL: z.string().default("file:./finbot.db"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  PORT: z.string().default("3000"),
+  WEBHOOK_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
