@@ -4,6 +4,7 @@ import { createTransaction } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
+import { isLikelyFinancial } from "../../utils/topicGuard.js";
 
 export async function handleTextMessage(ctx: AuthContext): Promise<void> {
   const text = ctx.message?.text?.trim();
@@ -15,6 +16,17 @@ export async function handleTextMessage(ctx: AuthContext): Promise<void> {
   // Check if we're in a setup session
   const handled = await handleSetupMessage(ctx);
   if (handled) return;
+
+  // Pre-filter: skip obviously non-financial messages to save API tokens
+  if (!isLikelyFinancial(text)) {
+    await ctx.reply(
+      "I'm your finance assistant — send me expenses or income.\n" +
+        '_Example: "spent 45 on groceries"_\n\n' +
+        "Use /help to see all commands.",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
 
   try {
     const result = await parseMessage(text);

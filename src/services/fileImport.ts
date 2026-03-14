@@ -7,7 +7,7 @@ interface ParsedRow {
 }
 
 export function parseFileToRows(buffer: Buffer, fileName: string): { rows: ParsedRow[]; headers: string[] } {
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = XLSX.read(buffer, { type: "buffer", raw: true, codepage: 65001 });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error("File has no sheets");
