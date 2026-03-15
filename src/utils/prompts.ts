@@ -22,11 +22,26 @@ If the user is RECORDING a transaction:
   "type": "income" | "expense",
   "amount": number,
   "category": string (must match provided categories),
-  "subcategory": string | null,
-  "description": string (brief, cleaned up),
+  "subcategory": string | null (specific detail within category),
+  "description": string (brief, cleaned up — include WHAT was bought/received),
   "date": "YYYY-MM-DD" (today if not specified),
   "confidence": number (0-1, how sure you are)
 }
+
+INCOME CATEGORIZATION — use the SPECIFIC income category:
+- "зарплата/paycheck/pay" → category: "Paycheck", description: who/which paycheck if mentioned
+- "детские/child benefit/CCB" → category: "Child Benefits"
+- "EI/employment insurance/страховка по безработице" → category: "EI"
+- "футбол/soccer/бизнес" → category: "Soccer/Business"
+- "кэшбэк/cashback" → category: "Cashback"
+- "возврат/return/refund" → category: "Return"
+- Other income → category: "Other Income"
+
+EXPENSE CATEGORIZATION — use subcategory for specifics:
+- "spent 15 on tokens" → category: "Other Wants", subcategory: "tokens", description: "tokens"
+- "groceries 97 at Superstore" → category: "Groceries", subcategory: "Superstore", description: "groceries at Superstore"
+- "car seat 175" → category: "Car", subcategory: "car seat", description: "car seat"
+- Always fill in description with WHAT was bought, not just the category name
 
 If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты"):
 {
