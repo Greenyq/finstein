@@ -28,6 +28,7 @@ interface TransactionData {
   transactionCount: number;
   categoryBreakdown: Array<{ category: string; amount: number }>;
   transactions?: Array<{ type: string; amount: number; category: string; subcategory: string | null; description: string | null; authorName: string | null }>;
+  walletAccounts?: Array<{ name: string; balance: number }>;
 }
 
 export async function respondToQuery(
@@ -58,6 +59,9 @@ Data:
           .join(", ")}
 ${data.transactions && data.transactions.length > 0
           ? `- Transactions detail:\n${data.transactions.map((t) => `  ${t.type} $${t.amount.toFixed(2)} [${t.category}${t.subcategory ? `/${t.subcategory}` : ""}]${t.authorName ? ` by ${t.authorName}` : ""}${t.description ? ` — ${t.description}` : ""}`).join("\n")}`
+          : ""}
+${data.walletAccounts && data.walletAccounts.length > 0
+          ? `- Wallet/Accounts:\n${data.walletAccounts.map((a) => `  ${a.name}: $${a.balance.toFixed(2)}`).join("\n")}\n  Total across accounts: $${data.walletAccounts.reduce((s, a) => s + a.balance, 0).toFixed(2)}`
           : ""}
 
 User's question: "${question}"`,

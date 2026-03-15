@@ -53,7 +53,18 @@ If the user is ASKING A QUESTION about their finances (e.g. "how much did I spen
   "rawMessage": "original message"
 }
 
-If you cannot parse either a transaction or a question:
+If the user is UPDATING ACCOUNT BALANCES (wallet, savings, bank accounts):
+Examples: "check in 9293, savings 8260", "на чекинге 9000, у вероники 8000 сбережений", "wealthsimple 721"
+{
+  "type": "wallet_update",
+  "accounts": [
+    { "name": "Check in", "balance": 9293 },
+    { "name": "Veronika's savings", "balance": 8260 }
+  ]
+}
+Use descriptive account names. Recognize both English and Russian account names.
+
+If you cannot parse either a transaction, question, or wallet update:
 { "type": "unknown", "rawMessage": "original message" }
 
 Canadian context:
