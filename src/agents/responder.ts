@@ -15,6 +15,8 @@ Rules:
 - If the user asks what they spent most/least on, rank categories
 - If the user asks about balance (plus/minus), calculate income - expenses
 - If the user makes a conversational comment (not a question), acknowledge it briefly and helpfully
+- If the user asks about a specific person's spending/income, use authorName to filter
+- If the user asks what they spent on in a category, show subcategories and descriptions
 - Never invent data — only use what's provided
 - Use $ for currency`;
 }
@@ -25,7 +27,7 @@ interface TransactionData {
   balance: number;
   transactionCount: number;
   categoryBreakdown: Array<{ category: string; amount: number }>;
-  transactions?: Array<{ type: string; amount: number; category: string; description: string | null }>;
+  transactions?: Array<{ type: string; amount: number; category: string; subcategory: string | null; description: string | null; authorName: string | null }>;
 }
 
 export async function respondToQuery(
@@ -55,7 +57,7 @@ Data:
           .map((c) => `${c.category}: $${c.amount.toFixed(2)}`)
           .join(", ")}
 ${data.transactions && data.transactions.length > 0
-          ? `- Transactions detail:\n${data.transactions.map((t) => `  ${t.type} $${t.amount.toFixed(2)} [${t.category}]${t.description ? ` — ${t.description}` : ""}`).join("\n")}`
+          ? `- Transactions detail:\n${data.transactions.map((t) => `  ${t.type} $${t.amount.toFixed(2)} [${t.category}${t.subcategory ? `/${t.subcategory}` : ""}]${t.authorName ? ` by ${t.authorName}` : ""}${t.description ? ` — ${t.description}` : ""}`).join("\n")}`
           : ""}
 
 User's question: "${question}"`,

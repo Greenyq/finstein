@@ -82,7 +82,9 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
               type: t.type,
               amount: t.amount,
               category: t.category,
+              subcategory: t.subcategory,
               description: t.description,
+              authorName: t.authorName,
             })),
           }, periodLabel, ru);
 
@@ -237,7 +239,9 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
       type: t.type,
       amount: t.amount,
       category: t.category,
+      subcategory: t.subcategory,
       description: t.description,
+      authorName: t.authorName,
     })),
   }, periodLabel, ru);
 
