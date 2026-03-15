@@ -22,12 +22,17 @@ export interface ParsedQuery {
   rawMessage: string;
 }
 
+export interface ParsedWalletUpdate {
+  type: "wallet_update";
+  accounts: Array<{ name: string; balance: number }>;
+}
+
 export interface UnknownMessage {
   type: "unknown";
   rawMessage: string;
 }
 
-export type ParserResult = ParsedTransaction | ParsedQuery | UnknownMessage;
+export type ParserResult = ParsedTransaction | ParsedQuery | ParsedWalletUpdate | UnknownMessage;
 
 export async function parseMessage(message: string): Promise<ParserResult> {
   const env = getEnv();
@@ -54,6 +59,16 @@ export async function parseMessage(message: string): Promise<ParserResult> {
 
   if (parsed.type === "unknown") {
     return { type: "unknown", rawMessage: message };
+  }
+
+  if (parsed.type === "wallet_update") {
+    const accounts = Array.isArray(parsed.accounts)
+      ? (parsed.accounts as Array<{ name: string; balance: number }>).map((a) => ({
+          name: String(a.name),
+          balance: Number(a.balance),
+        }))
+      : [];
+    return { type: "wallet_update", accounts };
   }
 
   if (parsed.type === "query") {

@@ -8,22 +8,23 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  telegramId    BigInt         @unique
+  id            String           @id @default(cuid())
+  telegramId    BigInt           @unique
   firstName     String
-  currency      String         @default("CAD")
-  timezone      String         @default("America/Winnipeg")
-  monthlyIncome Float          @default(0)
+  currency      String           @default("CAD")
+  timezone      String           @default("America/Winnipeg")
+  monthlyIncome Float            @default(0)
   familyId      String?
-  role          String         @default("owner")
-  isPremium     Boolean        @default(false)
-  familyPlan    Boolean        @default(false)
+  role          String           @default("owner")
+  isPremium     Boolean          @default(false)
+  familyPlan    Boolean          @default(false)
   trialEndsAt   DateTime?
   transactions  Transaction[]
   fixedExpenses FixedExpense[]
   budgetLimits  BudgetLimit[]
   goals         Goal[]
-  createdAt     DateTime       @default(now())
+  walletAccounts WalletAccount[]
+  createdAt     DateTime         @default(now())
 }
 
 model Transaction {
@@ -61,6 +62,18 @@ model BudgetLimit {
   createdAt    DateTime @default(now())
 
   @@unique([userId, category])
+}
+
+model WalletAccount {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  balance   Float
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
 }
 
 model Goal {

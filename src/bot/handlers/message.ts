@@ -9,6 +9,7 @@ import { isLikelyFinancial } from "../../utils/topicGuard.js";
 import { checkBudgetLimits } from "../commands/limit.js";
 import { getFamilyMemberIds } from "../../services/family.js";
 import { respondToQuery } from "../../agents/responder.js";
+import { upsertWalletAccount, getWalletAccounts } from "../../services/wallet.js";
 
 /** Detect if text is primarily Russian (has Cyrillic chars) */
 function isRussian(text: string): boolean {
@@ -59,7 +60,9 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
         const queryIds = memberIds.length > 1 ? memberIds : ctx.dbUser.id;
         const transactions = await getMonthlyTransactions(queryIds);
 
-        if (transactions.length > 0) {
+        const walletAccounts = await getWalletAccounts(queryIds);
+
+        if (transactions.length > 0 || walletAccounts.length > 0) {
           const byCategory = new Map<string, number>();
           let totalIncome = 0;
           let totalExpenses = 0;
@@ -86,6 +89,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
               description: t.description,
               authorName: t.authorName,
             })),
+            walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
           }, periodLabel, ru);
 
           await ctx.reply(reply, { parse_mode: "Markdown" });
@@ -117,6 +121,19 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
     if (result.type === "query") {
       await handleQuery(ctx, result, ru);
+      return;
+    }
+
+    if (result.type === "wallet_update") {
+      for (const account of result.accounts) {
+        await upsertWalletAccount(ctx.dbUser.id, account.name, account.balance);
+      }
+      const lines = result.accounts.map((a) => `• ${a.name}: *${formatCurrency(a.balance)}*`);
+      const total = result.accounts.reduce((sum, a) => sum + a.balance, 0);
+      const reply = ru
+        ? `💳 Балансы обновлены:\n${lines.join("\n")}\n\n_Итого: ${formatCurrency(total)}_`
+        : `💳 Balances updated:\n${lines.join("\n")}\n\n_Total: ${formatCurrency(total)}_`;
+      await ctx.reply(reply, { parse_mode: "Markdown" });
       return;
     }
 
@@ -228,6 +245,9 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 
+  // Get wallet accounts for context
+  const walletAccounts = await getWalletAccounts(queryIds);
+
   // Use AI to generate a smart, contextual response
   const reply = await respondToQuery(query.rawMessage, {
     totalIncome,
@@ -243,6 +263,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
       description: t.description,
       authorName: t.authorName,
     })),
+    walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
   }, periodLabel, ru);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
