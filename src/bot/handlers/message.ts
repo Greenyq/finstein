@@ -10,12 +10,8 @@ import { checkBudgetLimits } from "../commands/limit.js";
 import { getFamilyMemberIds } from "../../services/family.js";
 import { respondToQuery } from "../../agents/responder.js";
 import { upsertWalletAccount, getWalletAccounts } from "../../services/wallet.js";
-
-/** Detect if text is primarily Russian (has Cyrillic chars) */
-function isRussian(text: string): boolean {
-  const cyrillic = text.match(/[\u0400-\u04FF]/g);
-  return !!cyrillic && cyrillic.length > text.replace(/\s/g, "").length * 0.3;
-}
+import type { Lang } from "../../locales/index.js";
+import { t, detectLang } from "../../locales/index.js";
 
 export async function handleTextMessage(ctx: AuthContext, textOverride?: string): Promise<void> {
   const text = (textOverride ?? ctx.message?.text)?.trim();
@@ -28,25 +24,13 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   const handled = await handleSetupMessage(ctx);
   if (handled) return;
 
-  const ru = isRussian(text);
+  // Use user's saved language preference, with fallback to detection
+  const lang = (ctx.dbUser.language || detectLang(text)) as Lang;
+  const ru = lang === "ru";
 
   // Pre-filter: skip obviously non-financial messages to save API tokens
   if (!isLikelyFinancial(text)) {
-    if (ru) {
-      await ctx.reply(
-        "Я ваш финансовый помощник — отправьте мне расходы или доходы.\n" +
-          '_Например: "потратил 45 на продукты"_\n\n' +
-          "Используйте /help для списка команд.",
-        { parse_mode: "Markdown" }
-      );
-    } else {
-      await ctx.reply(
-        "I'm your finance assistant — send me expenses or income.\n" +
-          '_Example: "spent 45 on groceries"_\n\n' +
-          "Use /help to see all commands.",
-        { parse_mode: "Markdown" }
-      );
-    }
+    await ctx.reply(t("msg.not_financial", lang)(), { parse_mode: "Markdown" });
     return;
   }
 
@@ -99,23 +83,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
         // Fall through to default response
       }
 
-      if (ru) {
-        await ctx.reply(
-          "Не понял — попробуйте что-то вроде:\n" +
-            '_"потратил 45 на продукты"_\n' +
-            '_"зарплата 2180"_\n' +
-            '_"ресторан 35"_',
-          { parse_mode: "Markdown" }
-        );
-      } else {
-        await ctx.reply(
-          "I didn't catch that — try something like:\n" +
-            '_"spent 45 on groceries"_\n' +
-            '_"got paycheck 2180"_\n' +
-            '_"restaurant 35"_',
-          { parse_mode: "Markdown" }
-        );
-      }
+      await ctx.reply(t("msg.not_understood", lang)(), { parse_mode: "Markdown" });
       return;
     }
 
@@ -130,9 +98,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       }
       const lines = result.accounts.map((a) => `• ${a.name}: *${formatCurrency(a.balance)}*`);
       const total = result.accounts.reduce((sum, a) => sum + a.balance, 0);
-      const reply = ru
-        ? `💳 Балансы обновлены:\n${lines.join("\n")}\n\n_Итого: ${formatCurrency(total)}_`
-        : `💳 Balances updated:\n${lines.join("\n")}\n\n_Total: ${formatCurrency(total)}_`;
+      const reply = `💳 ${lines.join("\n")}\n\n${t("msg.wallet_updated", lang)(formatCurrency(total))}`;
       await ctx.reply(reply, { parse_mode: "Markdown" });
       return;
     }
@@ -154,16 +120,9 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
     const emoji = result.type === "income" ? "💰" : "✅";
 
-    let reply: string;
-    if (ru) {
-      reply = `${emoji} Записано: *${formatCurrency(result.amount)}* — ${result.category}`;
-      if (result.description) reply += `\n_${result.description}_`;
-      if (result.confidence < 0.7) reply += `\n\n⚠️ Не совсем уверен. Используйте /undo если ошибка.`;
-    } else {
-      reply = `${emoji} Recorded: *${formatCurrency(result.amount)}* — ${result.category}`;
-      if (result.description) reply += `\n_${result.description}_`;
-      if (result.confidence < 0.7) reply += `\n\n⚠️ I wasn't fully sure about this. Use /undo if it's wrong.`;
-    }
+    let reply = `${emoji} ${t("msg.recorded", lang)(formatCurrency(result.amount), result.category)}`;
+    if (result.description) reply += `\n_${result.description}_`;
+    if (result.confidence < 0.7) reply += `\n\n⚠️ ${t("msg.low_confidence", lang)()}`;
 
     await ctx.reply(reply, { parse_mode: "Markdown" });
 
@@ -180,15 +139,12 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       message: text,
       error,
     });
-    await ctx.reply(
-      ru
-        ? "Произошла ошибка. Попробуйте ещё раз."
-        : "Sorry, something went wrong processing your message. Please try again."
-    );
+    await ctx.reply(t("msg.error", lang)());
   }
 }
 
 async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Promise<void> {
+  const lang: Lang = ru ? "ru" : "en";
   const userId = ctx.dbUser.id;
   const memberIds = await getFamilyMemberIds(userId);
   const queryIds = memberIds.length > 1 ? memberIds : userId;
@@ -211,11 +167,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
   }
 
   if (transactions.length === 0) {
-    await ctx.reply(
-      ru
-        ? `Нет транзакций за ${periodLabel}. Начните с записи расходов!`
-        : `No transactions found for ${periodLabel}. Start by recording some expenses!`
-    );
+    await ctx.reply(t("msg.no_transactions", lang)(periodLabel));
     return;
   }
 

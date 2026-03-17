@@ -2,20 +2,21 @@ import type { AuthContext } from "../middleware/auth.js";
 import { deleteLastTransaction } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { clearReportCache } from "./report.js";
+import type { Lang } from "../../locales/index.js";
+import { t } from "../../locales/index.js";
 
 export async function undoCommand(ctx: AuthContext): Promise<void> {
+  const lang = (ctx.dbUser.language || "ru") as Lang;
   const deleted = await deleteLastTransaction(ctx.dbUser.id);
 
   if (!deleted) {
-    await ctx.reply("No transactions to undo.");
+    await ctx.reply(t("undo.empty", lang)());
     return;
   }
 
   clearReportCache(ctx.dbUser.id);
 
-  await ctx.reply(
-    `Removed: *${formatCurrency(deleted.amount)}* — ${deleted.category}` +
-      (deleted.description ? `\n_${deleted.description}_` : ""),
-    { parse_mode: "Markdown" }
-  );
+  let reply = t("undo.success", lang)(formatCurrency(deleted.amount), deleted.category);
+  if (deleted.description) reply += `\n_${deleted.description}_`;
+  await ctx.reply(reply, { parse_mode: "Markdown" });
 }

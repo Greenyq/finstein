@@ -3,14 +3,18 @@ import { getEnv } from "../utils/env.js";
 import { ADVISOR_SYSTEM_PROMPT } from "../utils/prompts.js";
 import type { AnalysisResult } from "./analyzer.js";
 
-export async function generateAdvice(analysis: AnalysisResult): Promise<string> {
+export async function generateAdvice(analysis: AnalysisResult, lang: string = "en"): Promise<string> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+
+  const langInstruction = lang === "ru"
+    ? "IMPORTANT: Respond entirely in Russian."
+    : "IMPORTANT: Respond entirely in English.";
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
-    system: ADVISOR_SYSTEM_PROMPT,
+    system: ADVISOR_SYSTEM_PROMPT + "\n\n" + langInstruction,
     messages: [
       {
         role: "user",

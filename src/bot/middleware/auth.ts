@@ -36,6 +36,7 @@ export type AuthContext = Context & {
     id: string;
     telegramId: bigint;
     firstName: string;
+    language: string;
     currency: string;
     timezone: string;
     monthlyIncome: number;
