@@ -33,8 +33,8 @@ export async function handleLangCallback(ctx: Context): Promise<void> {
   await ctx.answerCallbackQuery();
 
   const msg = newLang === "ru"
-    ? "Язык изменён на *Русский* 🇷🇺"
-    : "Language changed to *English* 🇬🇧";
+    ? "Язык изменён на *Русский*"
+    : "Language changed to *English*";
 
   await ctx.editMessageText(msg, { parse_mode: "Markdown" });
 }

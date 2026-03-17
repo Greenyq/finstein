@@ -44,8 +44,8 @@ export async function startCommand(ctx: Context): Promise<void> {
       .text("⚙️ " + t("onboard.setup_btn", lang)(), "onboard_setup")
       .text("📖 " + t("onboard.help_btn", lang)(), "onboard_help")
       .row()
-      .text("🇷🇺 Русский", "lang_ru")
-      .text("🇬🇧 English", "lang_en");
+      .text("Русский", "lang_ru")
+      .text("English", "lang_en");
 
     await ctx.reply(t("start.trial", lang)(), {
       parse_mode: "Markdown",
