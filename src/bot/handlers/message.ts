@@ -119,8 +119,14 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     clearReportCache(ctx.dbUser.id);
 
     const emoji = result.type === "income" ? "💰" : "✅";
+    const txDate = new Date(result.date);
+    const formattedDate = txDate.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-CA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
 
-    let reply = `${emoji} ${t("msg.recorded", lang)(formatCurrency(result.amount), result.category)}`;
+    let reply = `${emoji} ${t("msg.recorded", lang)(formatCurrency(result.amount), result.category, formattedDate)}`;
     if (result.description) reply += `\n_${result.description}_`;
     if (result.confidence < 0.7) reply += `\n\n⚠️ ${t("msg.low_confidence", lang)()}`;
 

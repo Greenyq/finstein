@@ -225,8 +225,10 @@ const translations = {
       `I didn't catch that — try:\n_"spent 45 on groceries"_\n_"got paycheck 2180"_\n_"restaurant 35"_`,
   },
   "msg.recorded": {
-    ru: (amount: string, category: string) => `Записано: *${amount}* — ${category}`,
-    en: (amount: string, category: string) => `Recorded: *${amount}* — ${category}`,
+    ru: (amount: string, category: string, date: string) =>
+      `Записано: *${amount}* — ${category}\n📅 ${date}`,
+    en: (amount: string, category: string, date: string) =>
+      `Recorded: *${amount}* — ${category}\n📅 ${date}`,
   },
   "msg.low_confidence": {
     ru: () => "Не совсем уверен. Используйте /undo если ошибка.",
