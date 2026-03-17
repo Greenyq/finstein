@@ -4,6 +4,8 @@ import { analyzeFinances } from "../../agents/analyzer.js";
 import { generateAdvice } from "../../agents/advisor.js";
 import { getFamilyMemberIds } from "../../services/family.js";
 import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
+import type { Lang } from "../../locales/index.js";
+import { t } from "../../locales/index.js";
 
 const reportCache = new Map<string, { advice: string; cachedAt: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -14,6 +16,7 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
     return;
   }
 
+  const lang = (ctx.dbUser.language || "ru") as Lang;
   const userId = ctx.dbUser.id;
   const memberIds = await getFamilyMemberIds(userId);
   const isFamily = memberIds.length > 1;
@@ -27,17 +30,14 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
     return;
   }
 
-  await ctx.reply("Analyzing your finances... This takes a moment.");
+  await ctx.reply(t("report.analyzing", lang)());
 
   try {
     const comparison = await getComparisonData(queryIds);
     const fixedExpenses = await getFixedExpenses(userId);
 
     if (comparison.currentMonth.transactionCount === 0) {
-      await ctx.reply(
-        "No transactions recorded this month yet. Start tracking by sending messages like _\"spent 45 on groceries\"_.",
-        { parse_mode: "Markdown" }
-      );
+      await ctx.reply(t("report.no_data", lang)(), { parse_mode: "Markdown" });
       return;
     }
 
@@ -53,7 +53,7 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
       monthlyIncome: ctx.dbUser.monthlyIncome,
     });
 
-    const advice = await generateAdvice(analysis);
+    const advice = await generateAdvice(analysis, lang);
 
     // Cache result
     reportCache.set(cacheKey, { advice, cachedAt: Date.now() });
@@ -61,14 +61,12 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
     await ctx.reply(advice, { parse_mode: "Markdown" });
   } catch (error) {
     console.error("Report generation failed:", error);
-    await ctx.reply("Sorry, I couldn't generate your report right now. Please try again later.");
+    await ctx.reply(t("report.error", lang)());
   }
 }
 
 export function clearReportCache(userId: string): void {
-  // Clear both individual and any family cache entries
   reportCache.delete(userId);
-  // Also clear family entries that might contain this user
   for (const key of reportCache.keys()) {
     if (key.startsWith("family:")) {
       reportCache.delete(key);

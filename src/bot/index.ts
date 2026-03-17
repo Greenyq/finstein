@@ -18,6 +18,8 @@ import { inviteCommand } from "./commands/invite.js";
 import { limitCommand } from "./commands/limit.js";
 import { recurringCommand } from "./commands/recurring.js";
 import { exportCommand } from "./commands/export.js";
+import { chartCommand } from "./commands/chart.js";
+import { langCommand, handleLangCallback } from "./commands/lang.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
@@ -46,7 +48,9 @@ bot.command("invite", (ctx) => inviteCommand(ctx as AuthContext));
 bot.command("limit", (ctx) => limitCommand(ctx as AuthContext));
 bot.command("recurring", (ctx) => recurringCommand(ctx as AuthContext));
 bot.command("export", (ctx) => exportCommand(ctx as AuthContext));
-bot.command("help", (ctx) => helpCommand(ctx));
+bot.command("chart", (ctx) => chartCommand(ctx as AuthContext));
+bot.command("lang", (ctx) => langCommand(ctx as AuthContext));
+bot.command("help", (ctx) => helpCommand(ctx as AuthContext));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
 
 // Pass bot instance to document handler for background messaging
@@ -59,6 +63,7 @@ bot.callbackQuery("file_import_cancel", (ctx) => handleFileImportCancel(ctx as A
 bot.callbackQuery(/^onboard_/, (ctx) => handleOnboardCallback(ctx));
 bot.callbackQuery(/^sheet_toggle_/, (ctx) => handleSheetToggle(ctx as AuthContext));
 bot.callbackQuery("sheet_import_go", (ctx) => handleSheetImportGo(ctx as AuthContext));
+bot.callbackQuery(/^lang_/, (ctx) => handleLangCallback(ctx));
 
 // Message handlers
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
@@ -72,10 +77,73 @@ bot.catch((err) => {
   console.error("Update that caused error:", JSON.stringify(err.ctx.update, null, 2));
 });
 
+/** Register bot commands with Telegram (shows in the menu) */
+async function setBotCommands() {
+  // Russian commands
+  await bot.api.setMyCommands(
+    [
+      { command: "status", description: "Сводка за месяц" },
+      { command: "chart", description: "Графики расходов" },
+      { command: "report", description: "AI-анализ финансов" },
+      { command: "history", description: "Последние транзакции" },
+      { command: "limit", description: "Лимиты по категориям" },
+      { command: "recurring", description: "Постоянные расходы" },
+      { command: "setup", description: "Настройки дохода" },
+      { command: "export", description: "Экспорт в Excel" },
+      { command: "invite", description: "Пригласить в семью" },
+      { command: "family", description: "Участники семьи" },
+      { command: "lang", description: "Сменить язык (RU/EN)" },
+      { command: "undo", description: "Отменить последнюю запись" },
+      { command: "help", description: "Все команды" },
+    ],
+    { language_code: "ru" }
+  );
+
+  // English commands
+  await bot.api.setMyCommands(
+    [
+      { command: "status", description: "Monthly summary" },
+      { command: "chart", description: "Expense charts" },
+      { command: "report", description: "AI financial analysis" },
+      { command: "history", description: "Recent transactions" },
+      { command: "limit", description: "Category spending limits" },
+      { command: "recurring", description: "Fixed expenses" },
+      { command: "setup", description: "Income settings" },
+      { command: "export", description: "Export to Excel" },
+      { command: "invite", description: "Invite to family budget" },
+      { command: "family", description: "Family members" },
+      { command: "lang", description: "Change language (RU/EN)" },
+      { command: "undo", description: "Undo last entry" },
+      { command: "help", description: "All commands" },
+    ],
+    { language_code: "en" }
+  );
+
+  // Default commands (fallback)
+  await bot.api.setMyCommands([
+    { command: "status", description: "Monthly summary / Сводка" },
+    { command: "chart", description: "Expense charts / Графики" },
+    { command: "report", description: "AI analysis / AI-анализ" },
+    { command: "history", description: "Recent transactions / История" },
+    { command: "limit", description: "Budget limits / Лимиты" },
+    { command: "setup", description: "Settings / Настройки" },
+    { command: "export", description: "Export to Excel / Экспорт" },
+    { command: "invite", description: "Invite family / Пригласить" },
+    { command: "lang", description: "Language / Язык (RU/EN)" },
+    { command: "undo", description: "Undo / Отменить" },
+    { command: "help", description: "All commands / Все команды" },
+  ]);
+
+  console.log("Bot commands registered (RU + EN + default)");
+}
+
 // Start
 async function main() {
-  console.log("Starting FinAdvisor bot...");
+  console.log("Starting Finstein bot...");
   startScheduler(bot);
+
+  // Register commands menu
+  await setBotCommands();
 
   if (env.NODE_ENV === "production" && env.WEBHOOK_URL) {
     // Production: webhook mode via HTTP server
@@ -119,12 +187,12 @@ async function main() {
     console.log(`Webhook set: ${env.WEBHOOK_URL}/webhook (pending updates dropped)`);
 
     server.listen(port, () => {
-      console.log(`FinAdvisor bot running in webhook mode on port ${port}`);
+      console.log(`Finstein bot running in webhook mode on port ${port}`);
     });
   } else {
     // Development: long polling
     await bot.start();
-    console.log("FinAdvisor bot running in polling mode!");
+    console.log("Finstein bot running in polling mode!");
   }
 }
 

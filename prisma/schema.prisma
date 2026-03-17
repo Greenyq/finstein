@@ -11,6 +11,7 @@ model User {
   id            String           @id @default(cuid())
   telegramId    BigInt           @unique
   firstName     String
+  language      String           @default("ru")
   currency      String           @default("CAD")
   timezone      String           @default("America/Winnipeg")
   monthlyIncome Float            @default(0)
