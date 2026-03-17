@@ -50,6 +50,37 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     const result = await parseMessage(text);
 
     if (result.type === "unknown") {
+      // Fallback: detect edit/delete intent that the parser missed
+      const fallbackResult = detectEditDeleteFallback(text);
+      if (fallbackResult) {
+        if (fallbackResult.action === "edit" && fallbackResult.newAmount !== null) {
+          const tx = await findTransactionByTarget(ctx.dbUser.id, fallbackResult.target);
+          if (tx) {
+            await updateTransaction(tx.id, { amount: fallbackResult.newAmount });
+            clearReportCache(ctx.dbUser.id);
+            const sign = tx.type === "income" ? "+" : "-";
+            const msg = ru
+              ? `✅ Обновлено: ${formatCurrency(tx.amount)} → *${formatCurrency(fallbackResult.newAmount)}* — ${tx.category}`
+              : `✅ Updated: ${formatCurrency(tx.amount)} → *${formatCurrency(fallbackResult.newAmount)}* — ${tx.category}`;
+            await ctx.reply(msg, { parse_mode: "Markdown" });
+            return;
+          }
+        } else if (fallbackResult.action === "delete") {
+          const tx = await findTransactionByTarget(ctx.dbUser.id, fallbackResult.target);
+          if (tx) {
+            await softDeleteTransaction(tx.id);
+            clearReportCache(ctx.dbUser.id);
+            const keyboard = new InlineKeyboard().text("↩️ Restore / Восстановить", `tx_restore_${tx.id}`);
+            const sign = tx.type === "income" ? "+" : "-";
+            const msg = ru
+              ? `🗑 Удалено: ${sign}${formatCurrency(tx.amount)} — ${tx.category}`
+              : `🗑 Deleted: ${sign}${formatCurrency(tx.amount)} — ${tx.category}`;
+            await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+            return;
+          }
+        }
+      }
+
       // Try to answer conversational financial messages using AI + current data
       try {
         const memberIds = await getFamilyMemberIds(ctx.dbUser.id);
@@ -280,6 +311,42 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
   }, periodLabel, ru);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
+}
+
+/**
+ * Fallback detector for edit/delete intent when parser returns "unknown".
+ * Catches conversational messages like "no, it was 58 not 78", "delete it", "wrong, should be 50".
+ */
+function detectEditDeleteFallback(text: string): { action: "edit" | "delete"; target: string; newAmount: number | null } | null {
+  const lower = text.toLowerCase();
+
+  // Edit patterns: messages with correction intent + two amounts (old → new)
+  const editKeywords = /\b(change|edit|fix|correct|wrong|should be|not|wasn't|от|на|а не|неправильно|измени|поменяй|исправь|было|должно быть|не \d|это не)\b/i;
+  const deleteKeywords = /\b(delete|remove|удали|убери|сотри|kill|drop)\b/i;
+
+  // Extract all dollar amounts from the text
+  const amounts = [...text.matchAll(/\$?\d+(?:[.,]\d{1,2})?/g)].map((m) =>
+    parseFloat(m[0].replace("$", "").replace(",", "."))
+  ).filter((n) => n > 0);
+
+  if (editKeywords.test(lower) && amounts.length >= 2) {
+    // "from $78 to $58.36" or "not 78 but 58" — first is old, last is new
+    const oldAmount = amounts[0]!;
+    const newAmount = amounts[amounts.length - 1]!;
+    return { action: "edit", target: String(oldAmount), newAmount };
+  }
+
+  if (editKeywords.test(lower) && amounts.length === 1) {
+    // "wrong, should be 58" — one amount is the new value, target is "last"
+    return { action: "edit", target: "last", newAmount: amounts[0]! };
+  }
+
+  if (deleteKeywords.test(lower)) {
+    const target = amounts.length > 0 ? String(amounts[0]) : "last";
+    return { action: "delete", target, newAmount: null };
+  }
+
+  return null;
 }
 
 /** Find a transaction by target string — "last" or keyword match on description/category/amount */
