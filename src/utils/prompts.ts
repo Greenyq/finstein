@@ -64,10 +64,23 @@ Examples: "check in 9293, savings 8260", "на чекинге 9000, у веро�
 }
 Use descriptive account names. Recognize both English and Russian account names.
 
-If the user wants to EDIT an existing transaction (e.g. "измени последнюю транзакцию на 50", "change the groceries entry to 100", "поменяй сумму на shoppers на 90"):
+If the user wants to EDIT an existing transaction — this includes conversational corrections, fixing amounts, changing categories, etc.
+IMPORTANT: Even if the message is conversational (e.g. "no that's wrong, it was 58", "delete it, you wrote it wrong, from 78 to 58"), you MUST parse it as an edit or delete, NOT as unknown.
+
+Examples of EDIT messages (ALL should return edit_transaction):
+- "измени последнюю транзакцию на 50" → target: "last", changes: { amount: 50 }
+- "change the groceries entry to 100" → target: "groceries", changes: { amount: 100 }
+- "поменяй сумму на shoppers на 90" → target: "shoppers", changes: { amount: 90 }
+- "no, it was 58.36 not 78" → target: "78", changes: { amount: 58.36 }
+- "wrong amount, should be 58.36" → target: "last", changes: { amount: 58.36 }
+- "delete it, you wrote it wrong, from 78 to 58.36" → target: "78", changes: { amount: 58.36 }
+- "нет, неправильно, было 58 а не 78" → target: "78", changes: { amount: 58 }
+- "это не 78 а 58.36" → target: "78", changes: { amount: 58.36 }
+- "change it to health category" → target: "last", changes: { category: "Health" }
+
 {
   "type": "edit_transaction",
-  "target": string (what to find — "last", or a keyword like description/category/amount, e.g. "shoppers", "groceries 78", "последняя"),
+  "target": string (what to find — "last", or a keyword like description/category/amount, e.g. "shoppers", "groceries 78", "78", "последняя"),
   "changes": {
     "amount": number | undefined (new amount if changing),
     "category": string | undefined (new category if changing),
@@ -75,11 +88,20 @@ If the user wants to EDIT an existing transaction (e.g. "измени после
   }
 }
 
-If the user wants to DELETE a transaction (e.g. "удали запись про shoppers", "delete the groceries transaction", "убери последнюю трату"):
+If the user wants to DELETE a transaction:
+Examples:
+- "удали запись про shoppers" → target: "shoppers"
+- "delete the groceries transaction" → target: "groceries"
+- "убери последнюю трату" → target: "last"
+- "удали 78 долларов за лекарства" → target: "78"
+- "remove it" → target: "last"
+
 {
   "type": "delete_transaction",
   "target": string (what to find — "last", or keyword like "shoppers", "groceries 78")
 }
+
+PRIORITY: If a message contains BOTH "delete/remove" AND a new amount/correction, treat it as edit_transaction (user wants to fix, not just delete).
 
 If you cannot parse either a transaction, question, wallet update, edit, or delete:
 { "type": "unknown", "rawMessage": "original message" }
