@@ -49,12 +49,16 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   try {
     const result = await parseMessage(text);
 
+    // Resolve family member IDs for searching transactions across the family
+    const memberIds = await getFamilyMemberIds(ctx.dbUser.id);
+    const queryIds = memberIds.length > 1 ? memberIds : ctx.dbUser.id;
+
     if (result.type === "unknown") {
       // Fallback: detect edit/delete intent that the parser missed
       const fallbackResult = detectEditDeleteFallback(text);
       if (fallbackResult) {
         if (fallbackResult.action === "edit" && fallbackResult.newAmount !== null) {
-          const tx = await findTransactionByTarget(ctx.dbUser.id, fallbackResult.target);
+          const tx = await findTransactionByTarget(queryIds, fallbackResult.target);
           if (tx) {
             await updateTransaction(tx.id, { amount: fallbackResult.newAmount });
             clearReportCache(ctx.dbUser.id);
@@ -66,7 +70,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
             return;
           }
         } else if (fallbackResult.action === "delete") {
-          const tx = await findTransactionByTarget(ctx.dbUser.id, fallbackResult.target);
+          const tx = await findTransactionByTarget(queryIds, fallbackResult.target);
           if (tx) {
             await softDeleteTransaction(tx.id);
             clearReportCache(ctx.dbUser.id);
@@ -83,8 +87,6 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
       // Try to answer conversational financial messages using AI + current data
       try {
-        const memberIds = await getFamilyMemberIds(ctx.dbUser.id);
-        const queryIds = memberIds.length > 1 ? memberIds : ctx.dbUser.id;
         const transactions = await getMonthlyTransactions(queryIds);
 
         const walletAccounts = await getWalletAccounts(queryIds);
@@ -147,7 +149,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     }
 
     if (result.type === "edit_transaction") {
-      const tx = await findTransactionByTarget(ctx.dbUser.id, result.target);
+      const tx = await findTransactionByTarget(queryIds, result.target);
       if (!tx) {
         const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
         await ctx.reply(msg);
@@ -172,7 +174,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     }
 
     if (result.type === "delete_transaction") {
-      const tx = await findTransactionByTarget(ctx.dbUser.id, result.target);
+      const tx = await findTransactionByTarget(queryIds, result.target);
       if (!tx) {
         const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
         await ctx.reply(msg);
@@ -350,7 +352,7 @@ function detectEditDeleteFallback(text: string): { action: "edit" | "delete"; ta
 }
 
 /** Find a transaction by target string — "last" or keyword match on description/category/amount */
-async function findTransactionByTarget(userId: string, target: string) {
+async function findTransactionByTarget(userId: string | string[], target: string) {
   const recent = await getRecentTransactions(userId, 20);
   if (recent.length === 0) return null;
 

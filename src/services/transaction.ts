@@ -71,9 +71,10 @@ export async function getLastNMonthsTransactions(userId: string | string[], mont
   });
 }
 
-export async function getRecentTransactions(userId: string, limit = 10) {
+export async function getRecentTransactions(userId: string | string[], limit = 10) {
+  const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
-    where: { userId, ...notDeleted },
+    where: { userId: userFilter, ...notDeleted },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
