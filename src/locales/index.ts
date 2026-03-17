@@ -89,14 +89,16 @@ const translations = {
       `/status — сводка за текущий месяц\n` +
       `/chart — графики расходов по категориям\n` +
       `/report — AI-анализ и рекомендации\n` +
-      `/history — последние транзакции\n` +
+      `/history — последние транзакции (редактировать / удалить)\n` +
+      `/trash — корзина (восстановить удалённые)\n` +
       `/undo — отменить последнюю запись`,
     en: () =>
       `*Finance:*\n` +
       `/status — current month summary\n` +
       `/chart — expense charts by category\n` +
       `/report — AI analysis & recommendations\n` +
-      `/history — recent transactions\n` +
+      `/history — recent transactions (edit / delete)\n` +
+      `/trash — trash bin (restore deleted)\n` +
       `/undo — undo last entry`,
   },
   "help.budget": {
@@ -141,6 +143,10 @@ const translations = {
       `• Голосовое сообщение\n` +
       `• Фото чека\n` +
       `• Excel/CSV файл\n\n` +
+      `*Редактирование:*\n` +
+      `• _"измени последнюю на 50"_\n` +
+      `• _"удали запись про shoppers"_\n` +
+      `• Или кнопки в /history\n\n` +
       `*Вопросы:*\n` +
       `• _"сколько потратили на продукты?"_\n` +
       `• _"покажи траты за 2 месяца"_`,
@@ -153,6 +159,10 @@ const translations = {
       `• Voice message\n` +
       `• Receipt photo\n` +
       `• Excel/CSV file\n\n` +
+      `*Editing:*\n` +
+      `• _"change last one to 50"_\n` +
+      `• _"delete the groceries entry"_\n` +
+      `• Or use buttons in /history\n\n` +
       `*Questions:*\n` +
       `• _"how much spent on groceries?"_\n` +
       `• _"show expenses for 2 months"_`,

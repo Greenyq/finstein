@@ -1,6 +1,9 @@
 import { prisma } from "../db/prisma.js";
 import { getMonthRange, getLastMonthRange, getLastNMonthsRange } from "../utils/formatting.js";
 
+/** Base filter to exclude soft-deleted transactions */
+const notDeleted = { deletedAt: null };
+
 interface CreateTransactionInput {
   userId: string;
   type: string;
@@ -36,6 +39,7 @@ export async function getMonthlyTransactions(userId: string | string[], date?: D
     where: {
       userId: userFilter,
       date: { gte: start, lte: end },
+      ...notDeleted,
     },
     orderBy: { date: "desc" },
   });
@@ -48,6 +52,7 @@ export async function getLastMonthTransactions(userId: string | string[]) {
     where: {
       userId: userFilter,
       date: { gte: start, lte: end },
+      ...notDeleted,
     },
     orderBy: { date: "desc" },
   });
@@ -60,6 +65,7 @@ export async function getLastNMonthsTransactions(userId: string | string[], mont
     where: {
       userId: userFilter,
       date: { gte: start, lte: end },
+      ...notDeleted,
     },
     orderBy: { date: "desc" },
   });
@@ -67,7 +73,7 @@ export async function getLastNMonthsTransactions(userId: string | string[], mont
 
 export async function getRecentTransactions(userId: string, limit = 10) {
   return prisma.transaction.findMany({
-    where: { userId },
+    where: { userId, ...notDeleted },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -75,12 +81,56 @@ export async function getRecentTransactions(userId: string, limit = 10) {
 
 export async function deleteLastTransaction(userId: string) {
   const last = await prisma.transaction.findFirst({
-    where: { userId },
+    where: { userId, ...notDeleted },
     orderBy: { createdAt: "desc" },
   });
   if (!last) return null;
-  await prisma.transaction.delete({ where: { id: last.id } });
+  await prisma.transaction.update({
+    where: { id: last.id },
+    data: { deletedAt: new Date() },
+  });
   return last;
+}
+
+/** Soft-delete a transaction by ID */
+export async function softDeleteTransaction(transactionId: string) {
+  return prisma.transaction.update({
+    where: { id: transactionId },
+    data: { deletedAt: new Date() },
+  });
+}
+
+/** Restore a soft-deleted transaction */
+export async function restoreTransaction(transactionId: string) {
+  return prisma.transaction.update({
+    where: { id: transactionId },
+    data: { deletedAt: null },
+  });
+}
+
+/** Get a transaction by ID */
+export async function getTransactionById(transactionId: string) {
+  return prisma.transaction.findUnique({ where: { id: transactionId } });
+}
+
+/** Update a transaction's fields */
+export async function updateTransaction(
+  transactionId: string,
+  data: { amount?: number; category?: string; subcategory?: string | null; description?: string | null },
+) {
+  return prisma.transaction.update({
+    where: { id: transactionId },
+    data,
+  });
+}
+
+/** Get recently deleted transactions for a user */
+export async function getDeletedTransactions(userId: string, limit = 10) {
+  return prisma.transaction.findMany({
+    where: { userId, deletedAt: { not: null } },
+    orderBy: { deletedAt: "desc" },
+    take: limit,
+  });
 }
 
 export async function deleteFileImportTransactions(userId: string): Promise<number> {
@@ -106,6 +156,7 @@ export async function countFileImportsByMonth(
         userId,
         rawMessage: { startsWith: "[file import]" },
         date: { gte: start, lte: end },
+        ...notDeleted,
       },
     });
     if (count > 0) counts.set(key, count);

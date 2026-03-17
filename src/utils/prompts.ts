@@ -64,7 +64,24 @@ Examples: "check in 9293, savings 8260", "на чекинге 9000, у веро�
 }
 Use descriptive account names. Recognize both English and Russian account names.
 
-If you cannot parse either a transaction, question, or wallet update:
+If the user wants to EDIT an existing transaction (e.g. "измени последнюю транзакцию на 50", "change the groceries entry to 100", "поменяй сумму на shoppers на 90"):
+{
+  "type": "edit_transaction",
+  "target": string (what to find — "last", or a keyword like description/category/amount, e.g. "shoppers", "groceries 78", "последняя"),
+  "changes": {
+    "amount": number | undefined (new amount if changing),
+    "category": string | undefined (new category if changing),
+    "description": string | undefined (new description if changing)
+  }
+}
+
+If the user wants to DELETE a transaction (e.g. "удали запись про shoppers", "delete the groceries transaction", "убери последнюю трату"):
+{
+  "type": "delete_transaction",
+  "target": string (what to find — "last", or keyword like "shoppers", "groceries 78")
+}
+
+If you cannot parse either a transaction, question, wallet update, edit, or delete:
 { "type": "unknown", "rawMessage": "original message" }
 
 Canadian context:

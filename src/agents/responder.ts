@@ -18,7 +18,11 @@ Rules:
 - If the user asks about a specific person's spending/income, use authorName to filter
 - If the user asks what they spent on in a category, show subcategories and descriptions
 - Never invent data — only use what's provided
-- Use $ for currency`;
+- Use $ for currency
+- If the user wants to edit or delete a transaction, tell them they can:
+  1. Write naturally: "измени последнюю на 50" / "удали запись про shoppers" / "change last to 50" / "delete groceries entry"
+  2. Use /history to see buttons for editing/deleting each transaction
+  3. Use /trash to see and restore deleted transactions`;
 }
 
 interface TransactionData {

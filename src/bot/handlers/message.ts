@@ -1,7 +1,8 @@
+import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
 import type { ParsedQuery } from "../../agents/parser.js";
-import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions } from "../../services/transaction.js";
+import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
@@ -10,6 +11,7 @@ import { checkBudgetLimits } from "../commands/limit.js";
 import { getFamilyMemberIds } from "../../services/family.js";
 import { respondToQuery } from "../../agents/responder.js";
 import { upsertWalletAccount, getWalletAccounts } from "../../services/wallet.js";
+import { getPendingEdit, processPendingEdit } from "./transaction.js";
 import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
 
@@ -19,6 +21,16 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
 
   // Skip commands
   if (text.startsWith("/")) return;
+
+  // Check if there's a pending edit waiting for user input
+  const chatId = ctx.chat?.id;
+  if (chatId) {
+    const pending = getPendingEdit(chatId);
+    if (pending) {
+      const handled = await processPendingEdit(ctx, text, pending);
+      if (handled) return;
+    }
+  }
 
   // Check if we're in a setup session
   const handled = await handleSetupMessage(ctx);
@@ -100,6 +112,49 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       const total = result.accounts.reduce((sum, a) => sum + a.balance, 0);
       const reply = `💳 ${lines.join("\n")}\n\n${t("msg.wallet_updated", lang)(formatCurrency(total))}`;
       await ctx.reply(reply, { parse_mode: "Markdown" });
+      return;
+    }
+
+    if (result.type === "edit_transaction") {
+      const tx = await findTransactionByTarget(ctx.dbUser.id, result.target);
+      if (!tx) {
+        const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
+        await ctx.reply(msg);
+        return;
+      }
+      const changes = result.changes;
+      if (changes.amount || changes.category || changes.description) {
+        await updateTransaction(tx.id, {
+          amount: changes.amount ?? undefined,
+          category: changes.category ?? undefined,
+          description: changes.description !== undefined ? changes.description : undefined,
+        });
+        clearReportCache(ctx.dbUser.id);
+        const updated = { ...tx, ...changes };
+        const sign = updated.type === "income" ? "+" : "-";
+        const msg = ru
+          ? `✅ Обновлено: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`
+          : `✅ Updated: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`;
+        await ctx.reply(msg, { parse_mode: "Markdown" });
+      }
+      return;
+    }
+
+    if (result.type === "delete_transaction") {
+      const tx = await findTransactionByTarget(ctx.dbUser.id, result.target);
+      if (!tx) {
+        const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
+        await ctx.reply(msg);
+        return;
+      }
+      await softDeleteTransaction(tx.id);
+      clearReportCache(ctx.dbUser.id);
+      const keyboard = new InlineKeyboard().text("↩️ Restore / Восстановить", `tx_restore_${tx.id}`);
+      const sign = tx.type === "income" ? "+" : "-";
+      const msg = ru
+        ? `🗑 Удалено: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`
+        : `🗑 Deleted: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`;
+      await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
       return;
     }
 
@@ -225,4 +280,42 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
   }, periodLabel, ru);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
+}
+
+/** Find a transaction by target string — "last" or keyword match on description/category/amount */
+async function findTransactionByTarget(userId: string, target: string) {
+  const recent = await getRecentTransactions(userId, 20);
+  if (recent.length === 0) return null;
+
+  const t = target.toLowerCase().trim();
+
+  // "last" / "последняя" / "последнюю" — return the most recent
+  if (t === "last" || t.startsWith("послед")) {
+    return recent[0]!;
+  }
+
+  // Try to match by description, category, or amount
+  const amountMatch = t.match(/\d+(\.\d+)?/);
+  const amountNum = amountMatch ? parseFloat(amountMatch[0]) : null;
+
+  for (const tx of recent) {
+    const desc = (tx.description ?? "").toLowerCase();
+    const cat = tx.category.toLowerCase();
+    const sub = (tx.subcategory ?? "").toLowerCase();
+
+    // Exact amount match
+    if (amountNum && tx.amount === amountNum) return tx;
+
+    // Keyword match in description, category, or subcategory
+    if (desc.includes(t) || cat.includes(t) || sub.includes(t)) return tx;
+
+    // Partial match — target words in description/category
+    const words = t.split(/\s+/).filter((w) => w.length > 2);
+    if (words.length > 0 && words.every((w) => desc.includes(w) || cat.includes(w) || sub.includes(w))) {
+      return tx;
+    }
+  }
+
+  // Fallback: return the most recent
+  return recent[0]!;
 }

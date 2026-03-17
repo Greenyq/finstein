@@ -1,22 +1,24 @@
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
-import { getRecentTransactions } from "../../services/transaction.js";
+import { getDeletedTransactions } from "../../services/transaction.js";
 import { formatCurrency, formatDate } from "../../utils/formatting.js";
 import type { Lang } from "../../locales/index.js";
 import { t } from "../../locales/index.js";
 
-export async function historyCommand(ctx: AuthContext): Promise<void> {
+export async function trashCommand(ctx: AuthContext): Promise<void> {
   const lang = (ctx.dbUser.language || "ru") as Lang;
-  const transactions = await getRecentTransactions(ctx.dbUser.id, 10);
+  const deleted = await getDeletedTransactions(ctx.dbUser.id, 10);
 
-  if (transactions.length === 0) {
-    await ctx.reply(t("history.empty", lang)(), { parse_mode: "Markdown" });
+  if (deleted.length === 0) {
+    const msg = lang === "ru" ? "Корзина пуста." : "Trash is empty.";
+    await ctx.reply(msg);
     return;
   }
 
-  let message = t("history.title", lang)() + "\n\n";
+  const title = lang === "ru" ? "*Удалённые транзакции:*" : "*Deleted transactions:*";
+  let message = title + "\n\n";
 
-  for (const [i, tx] of transactions.entries()) {
+  for (const [i, tx] of deleted.entries()) {
     const emoji = tx.type === "income" ? "💰" : "💸";
     const sign = tx.type === "income" ? "+" : "-";
     message += `${i + 1}. ${emoji} ${sign}${formatCurrency(tx.amount)} — ${tx.category}`;
@@ -25,15 +27,12 @@ export async function historyCommand(ctx: AuthContext): Promise<void> {
   }
 
   const keyboard = new InlineKeyboard();
-  for (const [i, tx] of transactions.entries()) {
+  for (const [i, tx] of deleted.entries()) {
     const short = `${i + 1}. ${formatCurrency(tx.amount)}`;
-    keyboard
-      .text(`✏️ ${short}`, `tx_edit_${tx.id}`)
-      .text(`🗑 ${short}`, `tx_del_${tx.id}`)
-      .row();
+    keyboard.text(`↩️ ${short}`, `tx_restore_${tx.id}`).row();
   }
 
-  message += `\n${lang === "ru" ? "_Нажмите кнопку чтобы изменить или удалить:_" : "_Tap a button to edit or delete:_"}`;
+  message += `\n${lang === "ru" ? "_Нажмите чтобы восстановить:_" : "_Tap to restore:_"}`;
 
   await ctx.reply(message, { parse_mode: "Markdown", reply_markup: keyboard });
 }
