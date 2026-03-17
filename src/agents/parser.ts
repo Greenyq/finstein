@@ -27,12 +27,31 @@ export interface ParsedWalletUpdate {
   accounts: Array<{ name: string; balance: number }>;
 }
 
+export interface ParsedEditTransaction {
+  type: "edit_transaction";
+  /** What to search for — description, category, amount, or "last" */
+  target: string;
+  changes: { amount?: number; category?: string; description?: string };
+}
+
+export interface ParsedDeleteTransaction {
+  type: "delete_transaction";
+  /** What to search for — description, category, amount, or "last" */
+  target: string;
+}
+
 export interface UnknownMessage {
   type: "unknown";
   rawMessage: string;
 }
 
-export type ParserResult = ParsedTransaction | ParsedQuery | ParsedWalletUpdate | UnknownMessage;
+export type ParserResult =
+  | ParsedTransaction
+  | ParsedQuery
+  | ParsedWalletUpdate
+  | ParsedEditTransaction
+  | ParsedDeleteTransaction
+  | UnknownMessage;
 
 export async function parseMessage(message: string): Promise<ParserResult> {
   const env = getEnv();
@@ -69,6 +88,25 @@ export async function parseMessage(message: string): Promise<ParserResult> {
         }))
       : [];
     return { type: "wallet_update", accounts };
+  }
+
+  if (parsed.type === "edit_transaction") {
+    return {
+      type: "edit_transaction",
+      target: String(parsed.target ?? "last"),
+      changes: {
+        amount: parsed.changes && typeof parsed.changes === "object" && "amount" in parsed.changes ? Number((parsed.changes as Record<string, unknown>).amount) : undefined,
+        category: parsed.changes && typeof parsed.changes === "object" && "category" in parsed.changes ? String((parsed.changes as Record<string, unknown>).category) : undefined,
+        description: parsed.changes && typeof parsed.changes === "object" && "description" in parsed.changes ? String((parsed.changes as Record<string, unknown>).description) : undefined,
+      },
+    };
+  }
+
+  if (parsed.type === "delete_transaction") {
+    return {
+      type: "delete_transaction",
+      target: String(parsed.target ?? "last"),
+    };
   }
 
   if (parsed.type === "query") {

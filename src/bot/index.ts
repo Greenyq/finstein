@@ -20,10 +20,12 @@ import { recurringCommand } from "./commands/recurring.js";
 import { exportCommand } from "./commands/export.js";
 import { chartCommand } from "./commands/chart.js";
 import { langCommand, handleLangCallback } from "./commands/lang.js";
+import { trashCommand } from "./commands/trash.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
 import { handleDocumentMessage, handleFileImportConfirm, handleFileImportReplace, handleFileImportCancel, handleSheetToggle, handleSheetImportGo, setDocumentBotInstance } from "./handlers/document.js";
+import { handleTxDeleteCallback, handleTxRestoreCallback, handleTxEditCallback, handleTxEditFieldCallback, handleTxEditCancelCallback } from "./handlers/transaction.js";
 import { startScheduler } from "../services/scheduler.js";
 
 const env = getEnv();
@@ -51,6 +53,7 @@ bot.command("export", (ctx) => exportCommand(ctx as AuthContext));
 bot.command("chart", (ctx) => chartCommand(ctx as AuthContext));
 bot.command("lang", (ctx) => langCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx as AuthContext));
+bot.command("trash", (ctx) => trashCommand(ctx as AuthContext));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
 
 // Pass bot instance to document handler for background messaging
@@ -64,6 +67,11 @@ bot.callbackQuery(/^onboard_/, (ctx) => handleOnboardCallback(ctx));
 bot.callbackQuery(/^sheet_toggle_/, (ctx) => handleSheetToggle(ctx as AuthContext));
 bot.callbackQuery("sheet_import_go", (ctx) => handleSheetImportGo(ctx as AuthContext));
 bot.callbackQuery(/^lang_/, (ctx) => handleLangCallback(ctx));
+bot.callbackQuery(/^tx_del_/, (ctx) => handleTxDeleteCallback(ctx));
+bot.callbackQuery(/^tx_restore_/, (ctx) => handleTxRestoreCallback(ctx));
+bot.callbackQuery(/^tx_edit_/, (ctx) => handleTxEditCallback(ctx));
+bot.callbackQuery(/^tx_editfield_/, (ctx) => handleTxEditFieldCallback(ctx));
+bot.callbackQuery(/^tx_editcancel_/, (ctx) => handleTxEditCancelCallback(ctx));
 
 // Message handlers
 bot.on("message:text", (ctx) => handleTextMessage(ctx as AuthContext));
@@ -85,7 +93,8 @@ async function setBotCommands() {
       { command: "status", description: "Сводка за месяц" },
       { command: "chart", description: "Графики расходов" },
       { command: "report", description: "AI-анализ финансов" },
-      { command: "history", description: "Последние транзакции" },
+      { command: "history", description: "История (редактировать/удалить)" },
+      { command: "trash", description: "Корзина (восстановить)" },
       { command: "limit", description: "Лимиты по категориям" },
       { command: "recurring", description: "Постоянные расходы" },
       { command: "setup", description: "Настройки дохода" },
@@ -105,7 +114,8 @@ async function setBotCommands() {
       { command: "status", description: "Monthly summary" },
       { command: "chart", description: "Expense charts" },
       { command: "report", description: "AI financial analysis" },
-      { command: "history", description: "Recent transactions" },
+      { command: "history", description: "Transactions (edit/delete)" },
+      { command: "trash", description: "Trash (restore deleted)" },
       { command: "limit", description: "Category spending limits" },
       { command: "recurring", description: "Fixed expenses" },
       { command: "setup", description: "Income settings" },
@@ -124,7 +134,8 @@ async function setBotCommands() {
     { command: "status", description: "Monthly summary / Сводка" },
     { command: "chart", description: "Expense charts / Графики" },
     { command: "report", description: "AI analysis / AI-анализ" },
-    { command: "history", description: "Recent transactions / История" },
+    { command: "history", description: "Transactions / История" },
+    { command: "trash", description: "Trash / Корзина" },
     { command: "limit", description: "Budget limits / Лимиты" },
     { command: "setup", description: "Settings / Настройки" },
     { command: "export", description: "Export to Excel / Экспорт" },

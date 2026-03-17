@@ -29,18 +29,19 @@ model User {
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
   type        String
   amount      Float
   category    String
   subcategory String?
   description String?
   authorName  String?
-  date        DateTime @default(now())
+  date        DateTime  @default(now())
   rawMessage  String?
-  createdAt   DateTime @default(now())
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
 }
 
 model FixedExpense {
