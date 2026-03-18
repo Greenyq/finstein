@@ -9,6 +9,24 @@ import {
 } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { clearReportCache } from "../commands/report.js";
+import { prisma } from "../../db/prisma.js";
+
+/** Check if the Telegram user has access to a transaction (owns it or is in the same family) */
+async function canAccessTransaction(telegramId: number, txUserId: string): Promise<boolean> {
+  const caller = await prisma.user.findUnique({ where: { telegramId: BigInt(telegramId) } });
+  if (!caller) return false;
+
+  // Direct owner
+  if (caller.id === txUserId) return true;
+
+  // Same family
+  if (caller.familyId) {
+    const txOwner = await prisma.user.findUnique({ where: { id: txUserId } });
+    if (txOwner?.familyId === caller.familyId) return true;
+  }
+
+  return false;
+}
 
 /** In-memory store for pending edits: chatId -> { transactionId, step } */
 const pendingEdits = new Map<number, { transactionId: string; field: string | null }>();
@@ -30,6 +48,11 @@ export async function handleTxDeleteCallback(ctx: Context): Promise<void> {
   const tx = await getTransactionById(txId);
   if (!tx) {
     await ctx.answerCallbackQuery({ text: "Transaction not found" });
+    return;
+  }
+
+  if (!ctx.from || !(await canAccessTransaction(ctx.from.id, tx.userId))) {
+    await ctx.answerCallbackQuery({ text: "Access denied / Нет доступа" });
     return;
   }
 
@@ -57,6 +80,11 @@ export async function handleTxRestoreCallback(ctx: Context): Promise<void> {
     return;
   }
 
+  if (!ctx.from || !(await canAccessTransaction(ctx.from.id, tx.userId))) {
+    await ctx.answerCallbackQuery({ text: "Access denied / Нет доступа" });
+    return;
+  }
+
   await restoreTransaction(txId);
   clearReportCache(tx.userId);
 
@@ -76,6 +104,11 @@ export async function handleTxEditCallback(ctx: Context): Promise<void> {
   const tx = await getTransactionById(txId);
   if (!tx) {
     await ctx.answerCallbackQuery({ text: "Transaction not found" });
+    return;
+  }
+
+  if (!ctx.from || !(await canAccessTransaction(ctx.from.id, tx.userId))) {
+    await ctx.answerCallbackQuery({ text: "Access denied / Нет доступа" });
     return;
   }
 
@@ -110,6 +143,11 @@ export async function handleTxEditFieldCallback(ctx: Context): Promise<void> {
   const tx = await getTransactionById(txId);
   if (!tx) {
     await ctx.answerCallbackQuery({ text: "Transaction not found" });
+    return;
+  }
+
+  if (!ctx.from || !(await canAccessTransaction(ctx.from.id, tx.userId))) {
+    await ctx.answerCallbackQuery({ text: "Access denied / Нет доступа" });
     return;
   }
 
