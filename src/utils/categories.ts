@@ -4,6 +4,10 @@ export const CATEGORIES = {
     "Child Benefits",
     "EI",
     "Soccer/Business",
+    "Social Security",
+    "SNAP/EBT",
+    "Tax Refund",
+    "1099 Income",
     "Cashback",
     "Return",
     "Other Income",
@@ -16,6 +20,8 @@ export const CATEGORIES = {
     "Transportation",
     "Pets",
     "Children",
+    "Immigration Fees",
+    "Remittance",
     "Other Needs",
   ],
   fixed: [
@@ -44,7 +50,7 @@ export const CATEGORIES = {
     "Liquor",
     "Other Wants",
   ],
-  savings: ["TFSA", "RRSP", "Emergency Fund", "Other Savings"],
+  savings: ["TFSA", "RRSP", "Emergency Fund", "401(k)", "IRA", "Roth IRA", "HSA", "Other Savings"],
 } as const;
 
 export type CategoryGroup = keyof typeof CATEGORIES;

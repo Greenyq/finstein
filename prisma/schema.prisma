@@ -25,6 +25,7 @@ model User {
   budgetLimits  BudgetLimit[]
   goals         Goal[]
   walletAccounts WalletAccount[]
+  milestonesCelebrated String           @default("[]")
   createdAt     DateTime         @default(now())
 }
 
