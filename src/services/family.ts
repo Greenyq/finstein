@@ -6,7 +6,7 @@ const inviteCodes = new Map<string, { familyId: string; ownerId: string; expires
 const INVITE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 function generateCode(): string {
-  return crypto.randomBytes(3).toString("hex").toUpperCase(); // 6-char hex
+  return crypto.randomBytes(6).toString("hex").toUpperCase(); // 12-char hex, ~281 trillion combinations
 }
 
 export async function createFamilyInvite(userId: string): Promise<string> {
