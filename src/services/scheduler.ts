@@ -323,7 +323,6 @@ async function sendSavingsProjection(
   // Get active goal if any
   const goal = await prisma.goal.findFirst({
     where: { userId: user.id, isActive: true },
-    orderBy: { createdAt: "asc" },
   });
 
   // Get total savings from wallet accounts
@@ -365,7 +364,10 @@ async function checkAndSendMilestones(
     }),
   );
 
-  const [current, m1, m2, m3] = summaries;
+  const current = summaries[0]!;
+  const m1 = summaries[1]!;
+  const m2 = summaries[2]!;
+  const m3 = summaries[3]!;
   const balanceHistory = [m3, m2, m1].map((s) => s.totalIncome - s.totalExpenses);
   const currentBalance = current.totalIncome - current.totalExpenses;
 
@@ -386,20 +388,17 @@ async function checkAndSendMilestones(
 
   // All categories before this month (for "first ever" detection)
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const categoriesAllTime = [
-    ...new Set(
+  const categoriesAllTime: string[] = Array.from(
+    new Set(
       allTimeTx
         .filter((t) => t.date < thisMonthStart)
-        .map((t) => t.category),
+        .map((t) => t.category as string),
     ),
-  ];
+  );
 
   // Immigration fee amounts
   const immigrationFeesThisMonth = current.categoryBreakdown
     .find((c) => c.category === "Immigration Fees")?.amount ?? 0;
-  const immigrationFeesPrevMonths = allTimeTx
-    .filter((t) => t.category === "Immigration Fees" && t.date < thisMonthStart)
-    .reduce((s, t) => s + 0, 0); // amount not in select; re-query below
 
   const immigrationTotals = await prisma.transaction.aggregate({
     where: {
