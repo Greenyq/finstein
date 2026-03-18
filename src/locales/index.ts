@@ -257,6 +257,30 @@ const translations = {
     en: (period: string) => `No transactions for ${period}. Start recording expenses!`,
   },
 
+  // ─── Weekly Pulse ───
+  "pulse.no_data": {
+    ru: () => "Недостаточно данных для воскресного пульса. Записывай расходы в течение недели!",
+    en: () => "Not enough data for the weekly pulse. Keep logging expenses through the week!",
+  },
+
+  // ─── Savings Projection ───
+  "projection.no_data": {
+    ru: () => "Мало данных для прогноза. Продолжай записывать доходы и расходы!",
+    en: () => "Not enough data for a projection yet. Keep logging income and expenses!",
+  },
+
+  // ─── Memory Comparison ───
+  "memory.no_data": {
+    ru: () => "Пока недостаточно истории для сравнения. Через пару месяцев станет интереснее!",
+    en: () => "Not enough history to compare yet. Check back in a couple of months!",
+  },
+
+  // ─── Milestones ───
+  "milestone.error": {
+    ru: () => "Не удалось отправить сообщение о достижении. Попробуем в следующий раз.",
+    en: () => "Couldn't send the milestone message. We'll try again next time.",
+  },
+
   // ─── Language ───
   "lang.current": {
     ru: () => "Текущий язык: *Русский*",
