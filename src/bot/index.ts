@@ -21,6 +21,7 @@ import { exportCommand } from "./commands/export.js";
 import { chartCommand } from "./commands/chart.js";
 import { langCommand, handleLangCallback } from "./commands/lang.js";
 import { trashCommand } from "./commands/trash.js";
+import { adminCommand } from "./commands/admin.js";
 import { handleTextMessage } from "./handlers/message.js";
 import { handleVoiceMessage } from "./handlers/voice.js";
 import { handlePhotoMessage } from "./handlers/photo.js";
@@ -55,6 +56,7 @@ bot.command("lang", (ctx) => langCommand(ctx as AuthContext));
 bot.command("help", (ctx) => helpCommand(ctx as AuthContext));
 bot.command("trash", (ctx) => trashCommand(ctx as AuthContext));
 bot.command("clearimport", (ctx) => clearImportCommand(ctx as AuthContext));
+bot.command("admin", (ctx) => adminCommand(ctx));
 
 // Pass bot instance to document handler for background messaging
 setDocumentBotInstance(bot);

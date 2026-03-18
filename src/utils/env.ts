@@ -12,6 +12,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   PORT: z.string().default("3000"),
   WEBHOOK_URL: z.string().optional(),
+  ADMIN_IDS: z.string().optional(), // Comma-separated Telegram IDs, e.g. "123456789,987654321"
 });
 
 export type Env = z.infer<typeof envSchema>;
