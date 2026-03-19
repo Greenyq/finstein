@@ -208,12 +208,26 @@ async function sendWeeklyPulse(
     .findMany({ where: { userId: user.id, type: "income", date: { gte: weekStart }, deletedAt: null } })
     .then((tx) => tx.reduce((s, t) => s + t.amount, 0));
 
+  // Gather recurring/fixed expenses for savings tips
+  const fixedExpenses = await prisma.fixedExpense.findMany({
+    where: { userId: user.id, isActive: true },
+    select: { name: true, amount: true, category: true },
+  });
+
+  // Gather budget limits for context
+  const budgetLimits = await prisma.budgetLimit.findMany({
+    where: { userId: user.id },
+    select: { category: true, monthlyLimit: true },
+  });
+
   const message = await generateWeeklyPulse({
     userName: user.firstName,
     weekExpenses,
     weekIncome,
     avgWeeklyExpenses,
     categoryBreakdown,
+    fixedExpenses,
+    budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.monthlyLimit })),
     lang,
   });
 
