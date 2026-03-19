@@ -12,6 +12,15 @@ export interface WeeklyPulseInput {
     amount: number;
     avgAmount: number; // average over the past 4 weeks for this category
   }>;
+  fixedExpenses?: Array<{
+    name: string;
+    amount: number;
+    category: string;
+  }>;
+  budgetLimits?: Array<{
+    category: string;
+    limit: number;
+  }>;
   lang: string;
 }
 
@@ -21,7 +30,7 @@ export async function generateWeeklyPulse(input: WeeklyPulseInput): Promise<stri
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 512,
+    max_tokens: 600,
     system: WEEKLY_PULSE_SYSTEM_PROMPT,
     messages: [{ role: "user", content: JSON.stringify(input, null, 2) }],
   });
