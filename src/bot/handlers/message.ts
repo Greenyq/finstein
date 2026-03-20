@@ -1,7 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
-import type { ParsedQuery } from "../../agents/parser.js";
+import type { ParsedQuery, SingleParserResult } from "../../agents/parser.js";
 import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
@@ -56,6 +56,19 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     const accountNames = existingAccounts.map((a) => a.name);
 
     const result = await parseMessage(text, accountNames.length > 0 ? accountNames : undefined);
+
+    // Handle compound (multi-action) messages
+    if (result.type === "compound") {
+      const replies: string[] = [];
+      for (const action of result.actions) {
+        const reply = await executeSingleAction(ctx, action, queryIds, ru, lang, text);
+        if (reply) replies.push(reply);
+      }
+      if (replies.length > 0) {
+        await ctx.reply(replies.join("\n\n"), { parse_mode: "Markdown" });
+      }
+      return;
+    }
 
     if (result.type === "unknown") {
       // Fallback: detect edit/delete intent that the parser missed
@@ -141,60 +154,79 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       return;
     }
 
-    if (result.type === "wallet_update") {
-      for (const account of result.accounts) {
-        await upsertWalletAccount(ctx.dbUser.id, account.name, account.balance);
-      }
-      const lines = result.accounts.map((a) => `• ${a.name}: *${formatCurrency(a.balance)}*`);
-      const total = result.accounts.reduce((sum, a) => sum + a.balance, 0);
-      const reply = `💳 ${lines.join("\n")}\n\n${t("msg.wallet_updated", lang)(formatCurrency(total))}`;
+    // Execute single action and reply
+    const reply = await executeSingleAction(ctx, result, queryIds, ru, lang, text);
+    if (reply) {
       await ctx.reply(reply, { parse_mode: "Markdown" });
-      return;
     }
+  } catch (error) {
+    console.error("Message handling failed:", {
+      userId: ctx.dbUser.id,
+      message: text,
+      error,
+    });
+    await ctx.reply(t("msg.error", lang)());
+  }
+}
 
-    if (result.type === "edit_transaction") {
-      const tx = await findTransactionByTarget(queryIds, result.target);
-      if (!tx) {
-        const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
-        await ctx.reply(msg);
-        return;
-      }
-      const changes = result.changes;
-      if (changes.amount || changes.category || changes.description) {
-        await updateTransaction(tx.id, {
-          amount: changes.amount ?? undefined,
-          category: changes.category ?? undefined,
-          description: changes.description !== undefined ? changes.description : undefined,
-        });
-        clearReportCache(ctx.dbUser.id);
-        const updated = { ...tx, ...changes };
-        const sign = updated.type === "income" ? "+" : "-";
-        const msg = ru
-          ? `✅ Обновлено: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`
-          : `✅ Updated: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`;
-        await ctx.reply(msg, { parse_mode: "Markdown" });
-      }
-      return;
+/**
+ * Execute a single parsed action and return the reply text (without sending it).
+ * Used both for standalone messages and as part of compound actions.
+ */
+async function executeSingleAction(
+  ctx: AuthContext,
+  result: SingleParserResult,
+  queryIds: string | string[],
+  ru: boolean,
+  lang: Lang,
+  rawText: string,
+): Promise<string | null> {
+  if (result.type === "wallet_update") {
+    for (const account of result.accounts) {
+      await upsertWalletAccount(ctx.dbUser.id, account.name, account.balance);
     }
+    const lines = result.accounts.map((a) => `• ${a.name}: *${formatCurrency(a.balance)}*`);
+    const total = result.accounts.reduce((sum, a) => sum + a.balance, 0);
+    clearReportCache(ctx.dbUser.id);
+    return `💳 ${lines.join("\n")}\n\n${t("msg.wallet_updated", lang)(formatCurrency(total))}`;
+  }
 
-    if (result.type === "delete_transaction") {
-      const tx = await findTransactionByTarget(queryIds, result.target);
-      if (!tx) {
-        const msg = ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
-        await ctx.reply(msg);
-        return;
-      }
-      await softDeleteTransaction(tx.id);
+  if (result.type === "edit_transaction") {
+    const tx = await findTransactionByTarget(queryIds, result.target);
+    if (!tx) {
+      return ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
+    }
+    const changes = result.changes;
+    if (changes.amount || changes.category || changes.description) {
+      await updateTransaction(tx.id, {
+        amount: changes.amount ?? undefined,
+        category: changes.category ?? undefined,
+        description: changes.description !== undefined ? changes.description : undefined,
+      });
       clearReportCache(ctx.dbUser.id);
-      const keyboard = new InlineKeyboard().text("↩️ Restore / Восстановить", `tx_restore_${tx.id}`);
-      const sign = tx.type === "income" ? "+" : "-";
-      const msg = ru
-        ? `🗑 Удалено: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`
-        : `🗑 Deleted: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`;
-      await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
-      return;
+      const updated = { ...tx, ...changes };
+      const sign = updated.type === "income" ? "+" : "-";
+      return ru
+        ? `✅ Обновлено: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`
+        : `✅ Updated: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`;
     }
+    return null;
+  }
 
+  if (result.type === "delete_transaction") {
+    const tx = await findTransactionByTarget(queryIds, result.target);
+    if (!tx) {
+      return ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
+    }
+    await softDeleteTransaction(tx.id);
+    clearReportCache(ctx.dbUser.id);
+    const sign = tx.type === "income" ? "+" : "-";
+    return ru
+      ? `🗑 Удалено: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`
+      : `🗑 Deleted: ${sign}${formatCurrency(tx.amount)} — ${tx.category}${tx.description ? ` (${tx.description})` : ""}`;
+  }
+
+  if (result.type === "income" || result.type === "expense") {
     await createTransaction({
       userId: ctx.dbUser.id,
       type: result.type,
@@ -204,10 +236,8 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       description: result.description,
       authorName: ctx.dbUser.firstName,
       date: new Date(result.date),
-      rawMessage: text,
+      rawMessage: rawText,
     });
-
-    // Clear cached report since data changed
     clearReportCache(ctx.dbUser.id);
 
     const emoji = result.type === "income" ? "💰" : "✅";
@@ -222,23 +252,16 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     if (result.description) reply += `\n_${result.description}_`;
     if (result.confidence < 0.7) reply += `\n\n⚠️ ${t("msg.low_confidence", lang)()}`;
 
-    await ctx.reply(reply, { parse_mode: "Markdown" });
-
     // Check budget limits after recording an expense
     if (result.type === "expense") {
       const warning = await checkBudgetLimits(ctx.dbUser.id, result.category, result.amount);
-      if (warning) {
-        await ctx.reply(warning, { parse_mode: "Markdown" });
-      }
+      if (warning) reply += `\n\n${warning}`;
     }
-  } catch (error) {
-    console.error("Message handling failed:", {
-      userId: ctx.dbUser.id,
-      message: text,
-      error,
-    });
-    await ctx.reply(t("msg.error", lang)());
+
+    return reply;
   }
+
+  return null;
 }
 
 async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Promise<void> {

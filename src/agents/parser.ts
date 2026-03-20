@@ -40,18 +40,27 @@ export interface ParsedDeleteTransaction {
   target: string;
 }
 
+export interface ParsedCompoundAction {
+  type: "compound";
+  actions: SingleParserResult[];
+}
+
 export interface UnknownMessage {
   type: "unknown";
   rawMessage: string;
 }
 
-export type ParserResult =
+export type SingleParserResult =
   | ParsedTransaction
   | ParsedQuery
   | ParsedWalletUpdate
   | ParsedEditTransaction
   | ParsedDeleteTransaction
   | UnknownMessage;
+
+export type ParserResult =
+  | SingleParserResult
+  | ParsedCompoundAction;
 
 export async function parseMessage(message: string, existingAccounts?: string[]): Promise<ParserResult> {
   const env = getEnv();
@@ -61,7 +70,7 @@ export async function parseMessage(message: string, existingAccounts?: string[])
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 256,
+    max_tokens: 512,
     system: getParserSystemPrompt(today, existingAccounts),
     messages: [{ role: "user", content: message }],
   });
@@ -69,14 +78,40 @@ export async function parseMessage(message: string, existingAccounts?: string[])
   const text =
     response.content[0]?.type === "text" ? response.content[0].text : "";
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // Try to match an array first (compound actions), then a single object
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  const jsonMatch = arrayMatch ?? text.match(/\{[\s\S]*\}/);
   if (!jsonMatch?.[0]) {
     return { type: "unknown", rawMessage: message };
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+  const rawParsed = JSON.parse(jsonMatch[0]) as unknown;
 
-  if (parsed.type === "unknown") {
+  // If the AI returned an array, parse each element
+  if (Array.isArray(rawParsed) && rawParsed.length > 1) {
+    const actions = rawParsed
+      .map((item) => parseSingleResult(item as Record<string, unknown>, message, today))
+      .filter((a) => a.type !== "unknown");
+    if (actions.length > 1) {
+      return { type: "compound", actions };
+    }
+    if (actions.length === 1) {
+      return actions[0]!;
+    }
+    return { type: "unknown", rawMessage: message };
+  }
+
+  // Single object (or array with 1 element)
+  const parsed = (Array.isArray(rawParsed) ? rawParsed[0] : rawParsed) as Record<string, unknown>;
+  return parseSingleResult(parsed, message, today);
+}
+
+function parseSingleResult(
+  parsed: Record<string, unknown>,
+  message: string,
+  today: string,
+): SingleParserResult {
+  if (parsed.type === "unknown" || !parsed.type) {
     return { type: "unknown", rawMessage: message };
   }
 

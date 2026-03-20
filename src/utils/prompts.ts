@@ -116,6 +116,15 @@ Examples:
 
 PRIORITY: If a message contains BOTH "delete/remove" AND a new amount/correction, treat it as edit_transaction (user wants to fix, not just delete).
 
+COMPOUND / MULTI-ACTION MESSAGES:
+If the user asks for MULTIPLE actions in one message (e.g. "удали X и запиши Y", "delete the groceries entry and add 9$ to Chinese store"),
+return a JSON ARRAY with each action as a separate object:
+[
+  { "type": "delete_transaction", "target": "Chinese store 1500" },
+  { "type": "expense", "amount": 9, "category": "Groceries", "subcategory": "Chinese store", "description": "Chinese store", "date": "2025-03-20", "confidence": 0.95 }
+]
+Only use an array when there are genuinely MULTIPLE distinct actions. For single actions, return a single JSON object as before.
+
 If you cannot parse either a transaction, question, wallet update, edit, or delete:
 { "type": "unknown", "rawMessage": "original message" }
 
