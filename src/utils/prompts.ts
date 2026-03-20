@@ -1,6 +1,10 @@
 import { CATEGORIES } from "./categories.js";
 
-export function getParserSystemPrompt(todayDate: string): string {
+export function getParserSystemPrompt(todayDate: string, existingAccounts?: string[]): string {
+  const accountContext = existingAccounts && existingAccounts.length > 0
+    ? `\n\nEXISTING WALLET ACCOUNTS (use these exact names when updating balances):\n${existingAccounts.map((a) => `- "${a}"`).join("\n")}\nIMPORTANT: When the user mentions an account, match it to one of the existing names above. For example, if "Savings" exists and user says "на сейвинге 20000", use name "Savings" — do NOT create a new account with a different name. Only create a new account name if nothing matches.`
+    : "";
+
   return `You are a financial transaction parser for a Canadian family budget app.
 Your job is to extract structured transaction data from natural language messages.
 
@@ -42,6 +46,15 @@ EXPENSE CATEGORIZATION — use subcategory for specifics:
 - "groceries 97 at Superstore" → category: "Groceries", subcategory: "Superstore", description: "groceries at Superstore"
 - "car seat 175" → category: "Car", subcategory: "car seat", description: "car seat"
 - Always fill in description with WHAT was bought, not just the category name
+
+SAVINGS WITHDRAWAL — when user says they TOOK money FROM savings to PAY for something:
+- This is an EXPENSE for whatever they paid for, NOT a savings category
+- "взяли из сейвинга 1500 на бухгалтерию" → type: "expense", category: "Other Needs", description: "accounting/bookkeeping"
+- "took 500 from savings for car repair" → type: "expense", category: "Car", description: "car repair"
+- "из накоплений заплатили за налоги 1500" → type: "expense", category: "Other Needs", description: "taxes"
+- Accounting, bookkeeping, taxes, CPA fees → category: "Other Needs"
+- Do NOT categorize as "Other Wants" — these are needs
+- If user also mentions the remaining savings balance (e.g. "на сейвинге осталось 20500"), return wallet_update instead with the updated balance
 
 If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты"):
 {
@@ -117,7 +130,7 @@ Canadian and US context:
 - Estimated quarterly taxes (Q1/Q2/Q3/Q4) → category "Other Needs"
 
 Available categories: ${JSON.stringify(CATEGORIES)}
-Today's date: ${todayDate}`;
+Today's date: ${todayDate}${accountContext}`;
 }
 
 export const WEEKLY_PULSE_SYSTEM_PROMPT = `You are Finstein — a warm, personal financial friend for Russian-speaking immigrants in Canada and the US. Every Sunday evening you send a brief weekly pulse message.
