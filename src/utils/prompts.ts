@@ -43,6 +43,15 @@ EXPENSE CATEGORIZATION — use subcategory for specifics:
 - "car seat 175" → category: "Car", subcategory: "car seat", description: "car seat"
 - Always fill in description with WHAT was bought, not just the category name
 
+SAVINGS WITHDRAWAL — when user says they TOOK money FROM savings to PAY for something:
+- This is an EXPENSE for whatever they paid for, NOT a savings category
+- "взяли из сейвинга 1500 на бухгалтерию" → type: "expense", category: "Other Needs", description: "accounting/bookkeeping"
+- "took 500 from savings for car repair" → type: "expense", category: "Car", description: "car repair"
+- "из накоплений заплатили за налоги 1500" → type: "expense", category: "Other Needs", description: "taxes"
+- Accounting, bookkeeping, taxes, CPA fees → category: "Other Needs"
+- Do NOT categorize as "Other Wants" — these are needs
+- If user also mentions the remaining savings balance (e.g. "на сейвинге осталось 20500"), return wallet_update instead with the updated balance
+
 If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты"):
 {
   "type": "query",
