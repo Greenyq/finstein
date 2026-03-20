@@ -47,11 +47,15 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   }
 
   try {
-    const result = await parseMessage(text);
-
     // Resolve family member IDs for searching transactions across the family
     const memberIds = await getFamilyMemberIds(ctx.dbUser.id);
     const queryIds = memberIds.length > 1 ? memberIds : ctx.dbUser.id;
+
+    // Fetch existing wallet accounts so the parser can match by name
+    const existingAccounts = await getWalletAccounts(queryIds);
+    const accountNames = existingAccounts.map((a) => a.name);
+
+    const result = await parseMessage(text, accountNames.length > 0 ? accountNames : undefined);
 
     if (result.type === "unknown") {
       // Fallback: detect edit/delete intent that the parser missed

@@ -1,6 +1,10 @@
 import { CATEGORIES } from "./categories.js";
 
-export function getParserSystemPrompt(todayDate: string): string {
+export function getParserSystemPrompt(todayDate: string, existingAccounts?: string[]): string {
+  const accountContext = existingAccounts && existingAccounts.length > 0
+    ? `\n\nEXISTING WALLET ACCOUNTS (use these exact names when updating balances):\n${existingAccounts.map((a) => `- "${a}"`).join("\n")}\nIMPORTANT: When the user mentions an account, match it to one of the existing names above. For example, if "Savings" exists and user says "на сейвинге 20000", use name "Savings" — do NOT create a new account with a different name. Only create a new account name if nothing matches.`
+    : "";
+
   return `You are a financial transaction parser for a Canadian family budget app.
 Your job is to extract structured transaction data from natural language messages.
 
@@ -126,7 +130,7 @@ Canadian and US context:
 - Estimated quarterly taxes (Q1/Q2/Q3/Q4) → category "Other Needs"
 
 Available categories: ${JSON.stringify(CATEGORIES)}
-Today's date: ${todayDate}`;
+Today's date: ${todayDate}${accountContext}`;
 }
 
 export const WEEKLY_PULSE_SYSTEM_PROMPT = `You are Finstein — a warm, personal financial friend for Russian-speaking immigrants in Canada and the US. Every Sunday evening you send a brief weekly pulse message.

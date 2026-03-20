@@ -53,7 +53,7 @@ export type ParserResult =
   | ParsedDeleteTransaction
   | UnknownMessage;
 
-export async function parseMessage(message: string): Promise<ParserResult> {
+export async function parseMessage(message: string, existingAccounts?: string[]): Promise<ParserResult> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
@@ -62,7 +62,7 @@ export async function parseMessage(message: string): Promise<ParserResult> {
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 256,
-    system: getParserSystemPrompt(today),
+    system: getParserSystemPrompt(today, existingAccounts),
     messages: [{ role: "user", content: message }],
   });
 
