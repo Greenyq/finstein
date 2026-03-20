@@ -21,6 +21,7 @@ export interface WeeklyPulseInput {
     category: string;
     limit: number;
   }>;
+  dealSearchResult?: string; // web search results for better deals on recurring bills
   lang: string;
 }
 
