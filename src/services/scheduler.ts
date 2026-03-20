@@ -9,6 +9,7 @@ import { generateMemoryComparison } from "../agents/memoryComparison.js";
 import { generateMilestoneCelebration, detectNewMilestones, type MilestoneKey } from "../agents/milestoneDetector.js";
 import { getFamilyMemberIds } from "./family.js";
 import { getLastNMonthsTransactions } from "./transaction.js";
+import { searchBetterDeals } from "./webSearch.js";
 import type { Bot } from "grammy";
 
 export function startScheduler(bot: Bot): void {
@@ -158,7 +159,7 @@ async function sendMonthlyReport(
 
 async function sendWeeklyPulse(
   bot: Bot,
-  user: { id: string; telegramId: bigint; firstName: string; language: string },
+  user: { id: string; telegramId: bigint; firstName: string; language: string; timezone: string },
 ): Promise<void> {
   const now = new Date();
   const weekStart = new Date(now);
@@ -220,6 +221,22 @@ async function sendWeeklyPulse(
     select: { category: true, monthlyLimit: true },
   });
 
+  // Web search for better deals on the most expensive recurring bill
+  let dealSearchResult: string | undefined;
+  if (fixedExpenses.length > 0) {
+    const searchable = ["Internet", "Phone", "Insurance", "Gym", "Subscriptions", "Utilities"];
+    const topExpense = [...fixedExpenses]
+      .filter((e) => searchable.some((s) => e.name.toLowerCase().includes(s.toLowerCase()) || e.category.toLowerCase().includes(s.toLowerCase())))
+      .sort((a, b) => b.amount - a.amount)[0];
+
+    if (topExpense) {
+      // Derive city from timezone (e.g. "America/Winnipeg" -> "Winnipeg")
+      const city = user.timezone.split("/").pop()?.replace(/_/g, " ") ?? "Canada";
+      const result = await searchBetterDeals(topExpense.name, topExpense.amount, city);
+      if (result) dealSearchResult = result;
+    }
+  }
+
   const message = await generateWeeklyPulse({
     userName: user.firstName,
     weekExpenses,
@@ -228,6 +245,7 @@ async function sendWeeklyPulse(
     categoryBreakdown,
     fixedExpenses,
     budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.monthlyLimit })),
+    dealSearchResult,
     lang,
   });
 

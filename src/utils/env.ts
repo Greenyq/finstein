@@ -13,6 +13,7 @@ const envSchema = z.object({
   PORT: z.string().default("3000"),
   WEBHOOK_URL: z.string().optional(),
   ADMIN_IDS: z.string().optional(), // Comma-separated Telegram IDs, e.g. "123456789,987654321"
+  TAVILY_API_KEY: z.string().optional(), // For web search in savings tips
 });
 
 export type Env = z.infer<typeof envSchema>;

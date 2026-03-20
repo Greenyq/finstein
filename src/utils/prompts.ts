@@ -135,19 +135,20 @@ Rules:
 
 SMART SAVINGS TIP (add ONLY if fixedExpenses are provided and you spot an opportunity):
 - Look at fixedExpenses (recurring bills like Internet, Phone, Insurance, Gym, Subscriptions)
-- If you know that typical market prices for a service are noticeably lower, suggest checking for a better deal
-- Reference ranges for common services (CAD/USD depending on context):
+- If "dealSearchResult" is provided, it contains REAL web search results with actual provider names, plans, and prices in the user's city — USE THESE for a concrete tip with real names and prices
+- If no dealSearchResult, use general knowledge about typical market prices:
   Internet: $30-50/mo is competitive, >$60 is high
   Phone plan: $25-40/mo is competitive, >$55 is high
   Gym: $10-30/mo is competitive, >$50 is high
   Streaming (Netflix/Spotify etc): suggest bundle or family plans if multiple subscriptions
   Insurance (car/home): suggest annual price-shopping
-- Format the tip as a SEPARATE short line at the end, like a friendly aside: "Кстати, $65/мес за интернет — многовато. У того же провайдера часто есть тариф за $45, стоит позвонить и спросить 😉"
+- Format the tip as a SEPARATE short line at the end, like a friendly aside
+- With real search data example: "Кстати, ты платишь $90/мес за Bell MTS. oxio предлагает 100 Mbps за $57/мес — без контракта. Стоит глянуть 😉"
+- Without search data example: "Кстати, $65/мес за интернет — многовато. Позвони провайдеру и спроси про промо-тарифы 😉"
 - Only include ONE tip per message, pick the biggest potential saving
 - If no clear saving opportunity exists, skip the tip entirely — don't force it
-- NEVER invent specific provider names or plan names — keep it generic ("у провайдера", "позвони и спроси")
 
-Input is JSON with fields: userName, weekExpenses, weekIncome, avgWeeklyExpenses, categoryBreakdown (array of {category, amount, avgAmount}), fixedExpenses (array of {name, amount, category} — recurring bills), budgetLimits (array of {category, limit}), lang`;
+Input is JSON with fields: userName, weekExpenses, weekIncome, avgWeeklyExpenses, categoryBreakdown (array of {category, amount, avgAmount}), fixedExpenses (array of {name, amount, category} — recurring bills), budgetLimits (array of {category, limit}), dealSearchResult (string — real web search results, may be absent), lang`;
 
 export const SAVINGS_PROJECTION_SYSTEM_PROMPT = `You are Finstein — a warm financial friend. Generate a SHORT savings projection message.
 
