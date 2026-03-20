@@ -221,9 +221,11 @@ async function sendWeeklyPulse(
     select: { category: true, monthlyLimit: true },
   });
 
-  // Web search for better deals on the most expensive recurring bill
+  // Web search for better deals — only on the first Sunday of the month
+  // to avoid repeating the same tip every week
+  const isFirstSundayOfMonth = now.getDate() <= 7;
   let dealSearchResult: string | undefined;
-  if (fixedExpenses.length > 0) {
+  if (isFirstSundayOfMonth && fixedExpenses.length > 0) {
     const searchable = ["Internet", "Phone", "Insurance", "Gym", "Subscriptions", "Utilities"];
     const topExpense = [...fixedExpenses]
       .filter((e) => searchable.some((s) => e.name.toLowerCase().includes(s.toLowerCase()) || e.category.toLowerCase().includes(s.toLowerCase())))
@@ -243,9 +245,12 @@ async function sendWeeklyPulse(
     weekIncome,
     avgWeeklyExpenses,
     categoryBreakdown,
-    fixedExpenses,
-    budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.monthlyLimit })),
-    dealSearchResult,
+    // Only include savings tip data on the first Sunday of the month
+    ...(isFirstSundayOfMonth && {
+      fixedExpenses,
+      budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.monthlyLimit })),
+      dealSearchResult,
+    }),
     lang,
   });
 
