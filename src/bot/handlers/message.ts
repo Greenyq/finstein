@@ -3,7 +3,7 @@ import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
 import type { ParsedQuery, SingleParserResult } from "../../agents/parser.js";
 import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getTodayTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
-import { formatCurrency } from "../../utils/formatting.js";
+import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
 import { isLikelyFinancial } from "../../utils/topicGuard.js";
@@ -55,13 +55,15 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     const existingAccounts = await getWalletAccounts(queryIds);
     const accountNames = existingAccounts.map((a) => a.name);
 
-    const result = await parseMessage(text, accountNames.length > 0 ? accountNames : undefined);
+    const timezone = ctx.dbUser.timezone ?? "America/Winnipeg";
+    const today = getTodayStringInTimezone(timezone);
+    const result = await parseMessage(text, accountNames.length > 0 ? accountNames : undefined, timezone);
 
     // Handle compound (multi-action) messages
     if (result.type === "compound") {
       const replies: string[] = [];
       for (const action of result.actions) {
-        const reply = await executeSingleAction(ctx, action, queryIds, ru, lang, text);
+        const reply = await executeSingleAction(ctx, action, queryIds, ru, lang, text, today);
         if (reply) replies.push(reply);
       }
       if (replies.length > 0) {
@@ -150,12 +152,12 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     }
 
     if (result.type === "query") {
-      await handleQuery(ctx, result, ru);
+      await handleQuery(ctx, result, ru, timezone);
       return;
     }
 
     // Execute single action and reply
-    const reply = await executeSingleAction(ctx, result, queryIds, ru, lang, text);
+    const reply = await executeSingleAction(ctx, result, queryIds, ru, lang, text, today);
     if (reply) {
       await ctx.reply(reply, { parse_mode: "Markdown" });
     }
@@ -180,6 +182,7 @@ async function executeSingleAction(
   ru: boolean,
   lang: Lang,
   rawText: string,
+  today?: string,
 ): Promise<string | null> {
   if (result.type === "wallet_update") {
     for (const account of result.accounts) {
@@ -227,6 +230,13 @@ async function executeSingleAction(
   }
 
   if (result.type === "income" || result.type === "expense") {
+    // Use actual current time when no explicit date was mentioned (result.date === today).
+    // This preserves the real timestamp, allowing correct timezone-aware "today" queries.
+    // For explicitly specified past dates, use noon UTC to avoid date boundary ambiguity.
+    const txDate = today && result.date === today
+      ? new Date()
+      : new Date(`${result.date}T12:00:00.000Z`);
+
     await createTransaction({
       userId: ctx.dbUser.id,
       type: result.type,
@@ -235,13 +245,12 @@ async function executeSingleAction(
       subcategory: result.subcategory ?? undefined,
       description: result.description,
       authorName: ctx.dbUser.firstName,
-      date: new Date(result.date),
+      date: txDate,
       rawMessage: rawText,
     });
     clearReportCache(ctx.dbUser.id);
 
     const emoji = result.type === "income" ? "💰" : "✅";
-    const txDate = new Date(result.date);
     const formattedDate = txDate.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-CA", {
       day: "numeric",
       month: "long",
@@ -264,7 +273,7 @@ async function executeSingleAction(
   return null;
 }
 
-async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Promise<void> {
+async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, timezone = "America/Winnipeg"): Promise<void> {
   const lang: Lang = ru ? "ru" : "en";
   const userId = ctx.dbUser.id;
   const memberIds = await getFamilyMemberIds(userId);
@@ -278,7 +287,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
     transactions = await getLastNMonthsTransactions(queryIds, query.months);
     periodLabel = ru ? `${query.months} мес.` : `${query.months} months`;
   } else if (query.period === "today") {
-    transactions = await getTodayTransactions(queryIds);
+    transactions = await getTodayTransactions(queryIds, timezone);
     periodLabel = ru ? "сегодня" : "today";
   } else if (query.period === "last_month") {
     transactions = await getLastMonthTransactions(queryIds);

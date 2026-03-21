@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getEnv } from "../utils/env.js";
 import { getParserSystemPrompt } from "../utils/prompts.js";
+import { getTodayStringInTimezone } from "../utils/formatting.js";
 
 export interface ParsedTransaction {
   type: "income" | "expense";
@@ -62,11 +63,11 @@ export type ParserResult =
   | SingleParserResult
   | ParsedCompoundAction;
 
-export async function parseMessage(message: string, existingAccounts?: string[]): Promise<ParserResult> {
+export async function parseMessage(message: string, existingAccounts?: string[], timezone = "America/Winnipeg"): Promise<ParserResult> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = getTodayStringInTimezone(timezone);
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",

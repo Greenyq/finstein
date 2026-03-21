@@ -58,8 +58,8 @@ export async function getLastMonthTransactions(userId: string | string[]) {
   });
 }
 
-export async function getTodayTransactions(userId: string | string[]) {
-  const { start, end } = getTodayRange();
+export async function getTodayTransactions(userId: string | string[], timezone = "America/Winnipeg") {
+  const { start, end } = getTodayRange(timezone);
   const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
     where: {
