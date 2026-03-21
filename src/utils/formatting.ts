@@ -35,6 +35,13 @@ export function getLastNMonthsRange(n: number): { start: Date; end: Date } {
   return { start, end };
 }
 
+export function getTodayRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
+
 export function escapeMarkdown(text: string): string {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
 }
