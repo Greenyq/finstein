@@ -19,7 +19,8 @@ export async function setupCommand(ctx: AuthContext): Promise<void> {
   });
 
   let message = `*Setup — Configure your finances*\n\n`;
-  message += `*Current monthly income:* ${formatCurrency(ctx.dbUser.monthlyIncome)}\n\n`;
+  message += `*Current monthly income:* ${formatCurrency(ctx.dbUser.monthlyIncome)}\n`;
+  message += `*Timezone:* ${ctx.dbUser.timezone}\n\n`;
 
   if (fixedExpenses.length > 0) {
     message += `*Fixed expenses:*\n`;
@@ -33,8 +34,10 @@ export async function setupCommand(ctx: AuthContext): Promise<void> {
 
   message += `To update, send one of:\n`;
   message += `• _"income 4500"_ — set monthly income\n`;
+  message += `• _"timezone America/Toronto"_ — set your timezone\n`;
   message += `• _"add mortgage 1200"_ — add fixed expense\n`;
   message += `• _"remove mortgage"_ — remove fixed expense\n`;
+  message += `\n_Common timezones:_ America/Vancouver · America/Denver · America/Chicago · America/Winnipeg · America/Toronto · America/New\\_York · Europe/Moscow · Asia/Almaty\n`;
   message += `\nSend /help to go back.`;
 
   setupSessions.set(userId, { step: "income" });
@@ -49,6 +52,24 @@ export async function handleSetupMessage(ctx: AuthContext): Promise<boolean> {
 
   const text = ctx.message?.text?.trim();
   if (!text) return false;
+
+  // Set timezone: "timezone America/Toronto"
+  const tzMatch = text.match(/^timezone\s+(\S+)$/i);
+  if (tzMatch?.[1]) {
+    const tz = tzMatch[1];
+    try {
+      // Validate the timezone by using it — throws on invalid input
+      Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+    } catch {
+      await ctx.reply(`Unknown timezone: _${tz}_\n\nTry one of: America/Vancouver, America/Denver, America/Chicago, America/Winnipeg, America/Toronto, America/New\\_York, Europe/Moscow, Asia/Almaty`, {
+        parse_mode: "Markdown",
+      });
+      return true;
+    }
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } });
+    await ctx.reply(`Timezone set to *${tz}*`, { parse_mode: "Markdown" });
+    return true;
+  }
 
   // Set income: "income 4500"
   const incomeMatch = text.match(/^income\s+([\d.]+)$/i);
