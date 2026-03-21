@@ -63,11 +63,11 @@ export type ParserResult =
   | SingleParserResult
   | ParsedCompoundAction;
 
-export async function parseMessage(message: string, existingAccounts?: string[], timezone = "America/Winnipeg"): Promise<ParserResult> {
+export async function parseMessage(message: string, existingAccounts?: string[], timezone = "America/Winnipeg", messageDate = new Date()): Promise<ParserResult> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-  const today = getTodayStringInTimezone(timezone);
+  const today = getTodayStringInTimezone(timezone, messageDate);
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
