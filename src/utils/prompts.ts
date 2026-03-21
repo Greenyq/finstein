@@ -56,11 +56,11 @@ SAVINGS WITHDRAWAL — when user says they TOOK money FROM savings to PAY for so
 - Do NOT categorize as "Other Wants" — these are needs
 - If user also mentions the remaining savings balance (e.g. "на сейвинге осталось 20500"), return wallet_update instead with the updated balance
 
-If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты"):
+If the user is ASKING A QUESTION about their finances (e.g. "how much did I spend on groceries?", "сколько потратили в марте?", "what's my balance?", "покажи за 2 месяца траты на продукты", "сколько потратил сегодня?", "what did I spend today?"):
 {
   "type": "query",
   "category": string | null (if asking about specific category),
-  "period": "current_month" | "last_month" | "all" (default "current_month"),
+  "period": "today" | "current_month" | "last_month" | "all" (use "today" when user asks about today/сегодня, default "current_month"),
   "months": number | null (if user asks for multiple months, e.g. "за 2 месяца" = 2, "last 3 months" = 3),
   "queryType": "spending" | "income" | "balance" | "summary",
   "rawMessage": "original message"

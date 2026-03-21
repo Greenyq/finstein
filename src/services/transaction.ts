@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma.js";
-import { getMonthRange, getLastMonthRange, getLastNMonthsRange } from "../utils/formatting.js";
+import { getMonthRange, getLastMonthRange, getLastNMonthsRange, getTodayRange } from "../utils/formatting.js";
 
 /** Base filter to exclude soft-deleted transactions */
 const notDeleted = { deletedAt: null };
@@ -47,6 +47,19 @@ export async function getMonthlyTransactions(userId: string | string[], date?: D
 
 export async function getLastMonthTransactions(userId: string | string[]) {
   const { start, end } = getLastMonthRange();
+  const userFilter = Array.isArray(userId) ? { in: userId } : userId;
+  return prisma.transaction.findMany({
+    where: {
+      userId: userFilter,
+      date: { gte: start, lte: end },
+      ...notDeleted,
+    },
+    orderBy: { date: "desc" },
+  });
+}
+
+export async function getTodayTransactions(userId: string | string[]) {
+  const { start, end } = getTodayRange();
   const userFilter = Array.isArray(userId) ? { in: userId } : userId;
   return prisma.transaction.findMany({
     where: {

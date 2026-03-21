@@ -2,7 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
 import type { ParsedQuery, SingleParserResult } from "../../agents/parser.js";
-import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
+import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getTodayTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
 import { formatCurrency } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
@@ -277,6 +277,9 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false): Pr
   if (query.months && query.months > 1) {
     transactions = await getLastNMonthsTransactions(queryIds, query.months);
     periodLabel = ru ? `${query.months} мес.` : `${query.months} months`;
+  } else if (query.period === "today") {
+    transactions = await getTodayTransactions(queryIds);
+    periodLabel = ru ? "сегодня" : "today";
   } else if (query.period === "last_month") {
     transactions = await getLastMonthTransactions(queryIds);
     const lastMonth = new Date();
