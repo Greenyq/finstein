@@ -180,7 +180,7 @@ const translations = {
   "status.needs": { ru: () => "Необходимое", en: () => "Needs" },
   "status.wants": { ru: () => "Желания", en: () => "Wants" },
   "status.savings": { ru: () => "Накопления", en: () => "Savings" },
-  "status.by_person": { ru: () => "По участникам", en: () => "By person" },
+  "status.by_person": { ru: () => "Расходы по участникам", en: () => "Expenses by person" },
   "status.top_categories": { ru: () => "Топ категорий", en: () => "Top categories" },
   "status.transactions_count": {
     ru: (n: number) => `${n} транзакций за этот месяц`,
