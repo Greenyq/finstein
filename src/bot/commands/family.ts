@@ -1,13 +1,6 @@
 import type { AuthContext } from "../middleware/auth.js";
 import { createFamilyInvite, getFamilyMembers } from "../../services/family.js";
-import { requireFamilyPlan, sendPremiumPrompt } from "../../utils/premium.js";
-
 export async function familyCommand(ctx: AuthContext): Promise<void> {
-  if (!requireFamilyPlan(ctx)) {
-    await sendPremiumPrompt(ctx, "family");
-    return;
-  }
-
   const members = await getFamilyMembers(ctx.dbUser.id);
   const code = await createFamilyInvite(ctx.dbUser.id);
 

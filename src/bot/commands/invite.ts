@@ -1,15 +1,8 @@
 import type { AuthContext } from "../middleware/auth.js";
 import { createFamilyInvite } from "../../services/family.js";
-import { requireFamilyPlan, sendPremiumPrompt } from "../../utils/premium.js";
-
 const BOT_LINK = "https://t.me/finsteinxbot";
 
 export async function inviteCommand(ctx: AuthContext): Promise<void> {
-  if (!requireFamilyPlan(ctx)) {
-    await sendPremiumPrompt(ctx, "family");
-    return;
-  }
-
   const code = await createFamilyInvite(ctx.dbUser.id);
 
   let msg = `👨‍👩‍👧‍👦 *Приглашение в семейный бюджет*\n\n`;

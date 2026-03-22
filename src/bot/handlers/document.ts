@@ -3,7 +3,6 @@ import { parseFileToSheets, extractTransactionsFromSheets, getSheetPreview, type
 import { createTransaction, countFileImportsByMonth, deleteFileImportsByMonth } from "../../services/transaction.js";
 import { clearReportCache } from "../commands/report.js";
 import { formatCurrency, getMonthRange } from "../../utils/formatting.js";
-import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 import { InlineKeyboard } from "grammy";
 import type { Bot } from "grammy";
 
@@ -81,11 +80,6 @@ function buildSheetMessage(pending: PendingSheets): string {
 }
 
 export async function handleDocumentMessage(ctx: AuthContext): Promise<void> {
-  if (!requirePremium(ctx, "report")) {
-    await sendPremiumPrompt(ctx, "report");
-    return;
-  }
-
   const doc = ctx.message?.document;
   if (!doc) return;
 
