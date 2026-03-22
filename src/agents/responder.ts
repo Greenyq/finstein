@@ -46,6 +46,7 @@ export async function respondToQuery(
   data: TransactionData,
   periodLabel: string,
   ru: boolean,
+  todayLabel?: string,
 ): Promise<string> {
   const env = getEnv();
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -57,7 +58,7 @@ export async function respondToQuery(
     messages: [
       {
         role: "user",
-        content: `Period: ${periodLabel}
+        content: `${todayLabel ? `Today's date: ${todayLabel}\n` : ""}Period: ${periodLabel}
 Data:
 - Total income: $${data.totalIncome.toFixed(2)}
 - Total expenses: $${data.totalExpenses.toFixed(2)}

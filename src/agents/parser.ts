@@ -16,7 +16,7 @@ export interface ParsedTransaction {
 export interface ParsedQuery {
   type: "query";
   category: string | null;
-  period: "today" | "current_month" | "last_month" | "all";
+  period: "today" | "yesterday" | "current_month" | "last_month" | "all";
   /** Number of months to include (e.g. 2 = current + last month). Defaults to 1. */
   months?: number;
   queryType: "spending" | "income" | "balance" | "summary";
