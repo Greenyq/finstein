@@ -44,22 +44,26 @@ export function getTodayStringInTimezone(timezone: string, referenceDate = new D
   }).format(referenceDate);
 }
 
-export function getTodayRange(timezone = "America/Winnipeg", referenceDate = new Date()): { start: Date; end: Date } {
-  const localDateStr = getTodayStringInTimezone(timezone, referenceDate);
-
-  // Calculate the UTC offset for this timezone at the reference time
+/** Returns the UTC start/end boundaries for a given local day in a timezone. */
+function getDayRange(localDateStr: string, timezone: string, referenceDate: Date): { start: Date; end: Date } {
   const utcMs = new Date(referenceDate.toLocaleString("en-US", { timeZone: "UTC" })).getTime();
   const tzMs = new Date(referenceDate.toLocaleString("en-US", { timeZone: timezone })).getTime();
-  const offsetMs = utcMs - tzMs; // positive = timezone is behind UTC (e.g. UTC-6 → +21600000)
-
-  // Parse as UTC dates, then shift by the offset to get the true UTC boundaries for that local day
-  const localMidnight = new Date(`${localDateStr}T00:00:00.000Z`);
-  const localEndOfDay = new Date(`${localDateStr}T23:59:59.999Z`);
-
+  const offsetMs = utcMs - tzMs;
   return {
-    start: new Date(localMidnight.getTime() + offsetMs),
-    end: new Date(localEndOfDay.getTime() + offsetMs),
+    start: new Date(new Date(`${localDateStr}T00:00:00.000Z`).getTime() + offsetMs),
+    end: new Date(new Date(`${localDateStr}T23:59:59.999Z`).getTime() + offsetMs),
   };
+}
+
+export function getTodayRange(timezone = "America/Winnipeg", referenceDate = new Date()): { start: Date; end: Date } {
+  const localDateStr = getTodayStringInTimezone(timezone, referenceDate);
+  return getDayRange(localDateStr, timezone, referenceDate);
+}
+
+export function getYesterdayRange(timezone = "America/Winnipeg", referenceDate = new Date()): { start: Date; end: Date } {
+  const yesterday = new Date(referenceDate.getTime() - 24 * 60 * 60 * 1000);
+  const localDateStr = getTodayStringInTimezone(timezone, yesterday);
+  return getDayRange(localDateStr, timezone, yesterday);
 }
 
 export function escapeMarkdown(text: string): string {

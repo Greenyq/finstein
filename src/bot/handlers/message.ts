@@ -2,7 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
 import { parseMessage } from "../../agents/parser.js";
 import type { ParsedQuery, SingleParserResult } from "../../agents/parser.js";
-import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getTodayTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
+import { createTransaction, getMonthlyTransactions, getLastMonthTransactions, getLastNMonthsTransactions, getTodayTransactions, getYesterdayTransactions, getRecentTransactions, softDeleteTransaction, updateTransaction } from "../../services/transaction.js";
 import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { handleSetupMessage } from "../commands/setup.js";
 import { clearReportCache } from "../commands/report.js";
@@ -126,7 +126,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
             }
           }
 
-          const periodLabel = new Date().toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
+          const periodLabel = messageDate.toLocaleString(ru ? "ru-RU" : "en-CA", { month: "long" });
           const reply = await respondToQuery(text, {
             totalIncome,
             totalExpenses,
@@ -142,7 +142,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
               authorName: t.authorName,
             })),
             walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
-          }, periodLabel, ru);
+          }, periodLabel, ru, today);
 
           await ctx.reply(reply, { parse_mode: "Markdown" });
           return;
@@ -286,6 +286,8 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
   const memberIds = await getFamilyMemberIds(userId);
   const queryIds = memberIds.length > 1 ? memberIds : userId;
 
+  const todayLabel = getTodayStringInTimezone(timezone, messageDate);
+
   // Get transactions based on period
   let transactions;
   let periodLabel: string;
@@ -296,6 +298,9 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
   } else if (query.period === "today") {
     transactions = await getTodayTransactions(queryIds, timezone, messageDate);
     periodLabel = ru ? "сегодня" : "today";
+  } else if (query.period === "yesterday") {
+    transactions = await getYesterdayTransactions(queryIds, timezone, messageDate);
+    periodLabel = ru ? "вчера" : "yesterday";
   } else if (query.period === "last_month") {
     transactions = await getLastMonthTransactions(queryIds);
     const lastMonth = new Date();
@@ -356,7 +361,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
       authorName: t.authorName,
     })),
     walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
-  }, periodLabel, ru);
+  }, periodLabel, ru, todayLabel);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
 }

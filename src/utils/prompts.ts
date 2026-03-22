@@ -60,7 +60,7 @@ If the user is ASKING A QUESTION about their finances (e.g. "how much did I spen
 {
   "type": "query",
   "category": string | null (if asking about specific category),
-  "period": "today" | "current_month" | "last_month" | "all" (use "today" when user asks about today/сегодня, default "current_month"),
+  "period": "today" | "yesterday" | "current_month" | "last_month" | "all" (use "today" for today/сегодня, "yesterday" for yesterday/вчера, default "current_month"),
   "months": number | null (if user asks for multiple months, e.g. "за 2 месяца" = 2, "last 3 months" = 3),
   "queryType": "spending" | "income" | "balance" | "summary",
   "rawMessage": "original message"
