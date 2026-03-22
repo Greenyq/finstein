@@ -3,7 +3,6 @@ import { getComparisonData, getFixedExpenses } from "../../services/budget.js";
 import { analyzeFinances } from "../../agents/analyzer.js";
 import { generateAdvice } from "../../agents/advisor.js";
 import { getFamilyMemberIds } from "../../services/family.js";
-import { requirePremium, sendPremiumPrompt } from "../../utils/premium.js";
 import type { Lang } from "../../locales/index.js";
 import { t } from "../../locales/index.js";
 
@@ -11,11 +10,6 @@ const reportCache = new Map<string, { advice: string; cachedAt: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 export async function reportCommand(ctx: AuthContext): Promise<void> {
-  if (!requirePremium(ctx, "report")) {
-    await sendPremiumPrompt(ctx, "report");
-    return;
-  }
-
   const lang = (ctx.dbUser.language || "ru") as Lang;
   const userId = ctx.dbUser.id;
   const memberIds = await getFamilyMemberIds(userId);
