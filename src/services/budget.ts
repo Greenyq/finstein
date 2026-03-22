@@ -110,6 +110,7 @@ export async function getPersonBreakdown(userIds: string[], date?: Date): Promis
       userId: { in: userIds },
       type: "expense",
       date: { gte: start, lte: end },
+      deletedAt: null,
     },
     select: { userId: true, amount: true },
   });
