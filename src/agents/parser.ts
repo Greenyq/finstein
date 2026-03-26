@@ -70,7 +70,7 @@ export async function parseMessage(message: string, existingAccounts?: string[],
   const today = getTodayStringInTimezone(timezone, messageDate);
 
   const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: "claude-sonnet-4-20250514",
     max_tokens: 512,
     system: getParserSystemPrompt(today, existingAccounts),
     messages: [{ role: "user", content: message }],
