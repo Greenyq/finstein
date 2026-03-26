@@ -90,7 +90,7 @@ export async function extractTransactionsFromSheets(
     let response;
     try {
       response = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 4096,
         system: `You are a financial data parser. Extract ALL individual transactions from spreadsheet data.
 
@@ -130,7 +130,7 @@ Rules:
         await new Promise((r) => setTimeout(r, 60_000));
         try {
           response = await client.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: "claude-sonnet-4-20250514",
             max_tokens: 4096,
             system: `You are a financial data parser. Extract ALL individual transactions from CSV spreadsheet data.
 
