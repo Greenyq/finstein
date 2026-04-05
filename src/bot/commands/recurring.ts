@@ -37,6 +37,7 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
     }
     msg += `\n*Итого:* ${formatCurrency(total)}/мес.\n\n`;
     msg += `Добавить: \`/recurring add Name Amount Day\`\n`;
+    msg += `Изменить: \`/recurring set Name NewAmount [NewDay]\`\n`;
     msg += `Удалить: \`/recurring remove Name\`\n`;
     msg += `Удалить категорию: \`/recurring remove-category Category\``;
 
@@ -74,6 +75,52 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
       `✅ Добавлено: *${name}* — ${formatCurrency(amount)} (каждый ${dayOfMonth}-й)`,
       { parse_mode: "Markdown" }
     );
+    return;
+  }
+
+  // Set (update amount and optionally day): /recurring set Name NewAmount [NewDay]
+  const setMatch = args.match(/^set\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(\d+)?\s*$/i);
+  if (setMatch) {
+    const name = setMatch[1]!.trim();
+    const newAmount = parseFloat(setMatch[2]!);
+    const newDay = setMatch[3] ? parseInt(setMatch[3]) : undefined;
+
+    if (newDay !== undefined && (newDay < 1 || newDay > 28)) {
+      await ctx.reply("День должен быть от 1 до 28.");
+      return;
+    }
+
+    const expense = await prisma.fixedExpense.findFirst({
+      where: {
+        userId: ctx.dbUser.id,
+        name: { equals: name, mode: "insensitive" },
+        isActive: true,
+      },
+    });
+
+    if (!expense) {
+      await ctx.reply(`Не найдено: "${name}". Используйте /recurring для списка.`);
+      return;
+    }
+
+    const oldAmount = expense.amount;
+    const oldDay = expense.dayOfMonth;
+
+    await prisma.fixedExpense.update({
+      where: { id: expense.id },
+      data: {
+        amount: newAmount,
+        ...(newDay !== undefined && { dayOfMonth: newDay }),
+      },
+    });
+
+    let msg = `✏️ Обновлено: *${expense.name}*\n`;
+    msg += `Сумма: ${formatCurrency(oldAmount)} → ${formatCurrency(newAmount)}`;
+    if (newDay !== undefined && newDay !== oldDay) {
+      msg += `\nДень: ${oldDay}-го → ${newDay}-го`;
+    }
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
     return;
   }
 
@@ -156,6 +203,7 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
     `Использование:\n` +
       `\`/recurring\` — список\n` +
       `\`/recurring add Name Amount Day\`\n` +
+      `\`/recurring set Name NewAmount [NewDay]\`\n` +
       `\`/recurring remove Name\`\n` +
       `\`/recurring remove-category Category\``,
     { parse_mode: "Markdown" }
