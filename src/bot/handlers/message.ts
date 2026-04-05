@@ -114,7 +114,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
         const transactions = await getMonthlyTransactions(queryIds);
 
         const walletAccounts = await getWalletAccounts(queryIds);
-        const fixedExpenses = await getFixedExpenses(ctx.dbUser.id);
+        const fixedExpenses = await getFixedExpenses(queryIds);
 
         if (transactions.length > 0 || walletAccounts.length > 0 || fixedExpenses.length > 0) {
           const byCategory = new Map<string, number>();
@@ -347,7 +347,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
 
   // Get wallet accounts and fixed expenses for context
   const walletAccounts = await getWalletAccounts(queryIds);
-  const fixedExpenses = await getFixedExpenses(userId);
+  const fixedExpenses = await getFixedExpenses(queryIds);
 
   // Use AI to generate a smart, contextual response
   const reply = await respondToQuery(query.rawMessage, {

@@ -28,7 +28,7 @@ export async function reportCommand(ctx: AuthContext): Promise<void> {
 
   try {
     const comparison = await getComparisonData(queryIds);
-    const fixedExpenses = await getFixedExpenses(userId);
+    const fixedExpenses = await getFixedExpenses(queryIds);
 
     if (comparison.currentMonth.transactionCount === 0) {
       await ctx.reply(t("report.no_data", lang)(), { parse_mode: "Markdown" });
