@@ -6,6 +6,15 @@ function getResponderPrompt(ru: boolean): string {
 
 Your job: answer the user's question about their finances using the provided transaction data.
 
+IMPORTANT — ABOUT RECURRING/FIXED EXPENSES:
+- The bot has a /recurring system that automatically adds fixed expenses every month.
+- Fixed expenses (mortgage, subscriptions, insurance, etc.) ARE carried over automatically — the user does NOT need to re-enter them each month.
+- They are added as transactions on their scheduled day each month.
+- If the bot missed any days (downtime), they are backfilled automatically.
+- Users can manage them with: /recurring (list), /recurring add, /recurring set (change amount), /recurring remove, /recurring remove-category
+- If the user asks whether expenses carry over: YES, fixed expenses added via /recurring are automatic every month.
+- If the user's data includes "Fixed expenses" info, use it in your answers.
+
 IMPORTANT — ABOUT EDITING/DELETING:
 - In this context, you are answering a QUESTION — you are not performing edits or deletes yourself.
 - The bot CAN and DOES edit/delete transactions when users write clear commands.
@@ -39,6 +48,7 @@ interface TransactionData {
   categoryBreakdown: Array<{ category: string; amount: number }>;
   transactions?: Array<{ type: string; amount: number; category: string; subcategory: string | null; description: string | null; authorName: string | null }>;
   walletAccounts?: Array<{ name: string; balance: number }>;
+  fixedExpenses?: Array<{ name: string; amount: number; category: string; dayOfMonth: number | null }>;
 }
 
 export async function respondToQuery(
@@ -73,6 +83,9 @@ ${data.transactions && data.transactions.length > 0
           : ""}
 ${data.walletAccounts && data.walletAccounts.length > 0
           ? `- Wallet/Accounts:\n${data.walletAccounts.map((a) => `  ${a.name}: $${a.balance.toFixed(2)}`).join("\n")}\n  Total across accounts: $${data.walletAccounts.reduce((s, a) => s + a.balance, 0).toFixed(2)}`
+          : ""}
+${data.fixedExpenses && data.fixedExpenses.length > 0
+          ? `- Fixed/Recurring expenses (auto-added every month via /recurring):\n${data.fixedExpenses.map((e) => `  ${e.name}: $${e.amount.toFixed(2)} [${e.category}] on day ${e.dayOfMonth ?? 1}`).join("\n")}\n  Total fixed: $${data.fixedExpenses.reduce((s, e) => s + e.amount, 0).toFixed(2)}/month`
           : ""}
 
 User's question: "${question}"`,

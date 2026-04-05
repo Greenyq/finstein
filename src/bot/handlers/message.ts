@@ -11,6 +11,7 @@ import { checkBudgetLimits } from "../commands/limit.js";
 import { getFamilyMemberIds } from "../../services/family.js";
 import { respondToQuery } from "../../agents/responder.js";
 import { upsertWalletAccount, getWalletAccounts } from "../../services/wallet.js";
+import { getFixedExpenses } from "../../services/budget.js";
 import { getPendingEdit, processPendingEdit } from "./transaction.js";
 import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
@@ -113,8 +114,9 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
         const transactions = await getMonthlyTransactions(queryIds);
 
         const walletAccounts = await getWalletAccounts(queryIds);
+        const fixedExpenses = await getFixedExpenses(ctx.dbUser.id);
 
-        if (transactions.length > 0 || walletAccounts.length > 0) {
+        if (transactions.length > 0 || walletAccounts.length > 0 || fixedExpenses.length > 0) {
           const byCategory = new Map<string, number>();
           let totalIncome = 0;
           let totalExpenses = 0;
@@ -142,6 +144,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
               authorName: t.authorName,
             })),
             walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
+            fixedExpenses: fixedExpenses.map((e) => ({ name: e.name, amount: e.amount, category: e.category, dayOfMonth: e.dayOfMonth })),
           }, periodLabel, ru, today);
 
           await ctx.reply(reply, { parse_mode: "Markdown" });
@@ -342,8 +345,9 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 
-  // Get wallet accounts for context
+  // Get wallet accounts and fixed expenses for context
   const walletAccounts = await getWalletAccounts(queryIds);
+  const fixedExpenses = await getFixedExpenses(userId);
 
   // Use AI to generate a smart, contextual response
   const reply = await respondToQuery(query.rawMessage, {
@@ -361,6 +365,7 @@ async function handleQuery(ctx: AuthContext, query: ParsedQuery, ru = false, tim
       authorName: t.authorName,
     })),
     walletAccounts: walletAccounts.map((a) => ({ name: a.name, balance: a.balance })),
+    fixedExpenses: fixedExpenses.map((e) => ({ name: e.name, amount: e.amount, category: e.category, dayOfMonth: e.dayOfMonth })),
   }, periodLabel, ru, todayLabel);
 
   await ctx.reply(reply, { parse_mode: "Markdown" });
