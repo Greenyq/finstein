@@ -37,7 +37,8 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
     }
     msg += `\n*Итого:* ${formatCurrency(total)}/мес.\n\n`;
     msg += `Добавить: \`/recurring add Name Amount Day\`\n`;
-    msg += `Удалить: \`/recurring remove Name\``;
+    msg += `Удалить: \`/recurring remove Name\`\n`;
+    msg += `Удалить категорию: \`/recurring remove-category Category\``;
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
     return;
@@ -76,6 +77,50 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
     return;
   }
 
+  // Remove by category: /recurring remove-category CategoryName
+  const removeCatMatch = args.match(/^remove[- ]?category\s+(.+)$/i);
+  if (removeCatMatch) {
+    const category = removeCatMatch[1]!.trim();
+
+    const expenses = await prisma.fixedExpense.findMany({
+      where: {
+        userId: ctx.dbUser.id,
+        category: { equals: category, mode: "insensitive" },
+        isActive: true,
+      },
+    });
+
+    if (expenses.length === 0) {
+      // Show available categories to help user
+      const allExpenses = await prisma.fixedExpense.findMany({
+        where: { userId: ctx.dbUser.id, isActive: true },
+        select: { category: true },
+      });
+      const categories = [...new Set(allExpenses.map((e: { category: string }) => e.category))];
+      const catList = categories.length > 0
+        ? `\n\nДоступные категории:\n${categories.map((c) => `• ${c}`).join("\n")}`
+        : "";
+      await ctx.reply(`Не найдено расходов в категории "${category}".${catList}`);
+      return;
+    }
+
+    await prisma.fixedExpense.updateMany({
+      where: {
+        userId: ctx.dbUser.id,
+        category: { equals: category, mode: "insensitive" },
+        isActive: true,
+      },
+      data: { isActive: false },
+    });
+
+    let msg = `❌ Удалены все расходы из категории *${expenses[0]!.category}*:\n\n`;
+    for (const e of expenses) {
+      msg += `• ${e.name} — ${formatCurrency(e.amount)}\n`;
+    }
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+    return;
+  }
+
   // Remove: /recurring remove Name
   const removeMatch = args.match(/^(?:remove|delete|del|rm)\s+(.+)$/i);
   if (removeMatch) {
@@ -111,7 +156,8 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
     `Использование:\n` +
       `\`/recurring\` — список\n` +
       `\`/recurring add Name Amount Day\`\n` +
-      `\`/recurring remove Name\``,
+      `\`/recurring remove Name\`\n` +
+      `\`/recurring remove-category Category\``,
     { parse_mode: "Markdown" }
   );
 }
