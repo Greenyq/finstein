@@ -86,7 +86,10 @@ export async function parseMessage(message: string, existingAccounts?: string[],
     return { type: "unknown", rawMessage: message };
   }
 
-  const rawParsed = JSON.parse(jsonMatch[0]) as unknown;
+  const rawParsed = safeJsonParse(jsonMatch[0]);
+  if (rawParsed === undefined) {
+    return { type: "unknown", rawMessage: message };
+  }
 
   // If the AI returned an array, parse each element
   if (Array.isArray(rawParsed) && rawParsed.length > 1) {
@@ -105,6 +108,56 @@ export async function parseMessage(message: string, existingAccounts?: string[],
   // Single object (or array with 1 element)
   const parsed = (Array.isArray(rawParsed) ? rawParsed[0] : rawParsed) as Record<string, unknown>;
   return parseSingleResult(parsed, message, today);
+}
+
+function safeJsonParse(raw: string): unknown | undefined {
+  // Try direct parse first
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Ignore — try cleanup below
+  }
+
+  // Clean up common AI response issues:
+  // - trailing commas before ] or }
+  // - control characters
+  let cleaned = raw
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\x00-\x1f\x7f]/g, (ch) => (ch === "\n" || ch === "\t" ? ch : ""));
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Ignore
+  }
+
+  // Try extracting individual JSON objects and wrapping in array
+  const objects: string[] = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (raw[i] === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        objects.push(raw.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  if (objects.length > 0) {
+    try {
+      const arr = objects.map((o) => JSON.parse(o));
+      return arr.length === 1 ? arr[0] : arr;
+    } catch {
+      // Give up
+    }
+  }
+
+  return undefined;
 }
 
 function parseSingleResult(
