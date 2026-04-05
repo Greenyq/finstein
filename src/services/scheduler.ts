@@ -160,7 +160,7 @@ async function sendMonthlyReport(
 
   if (comparison.currentMonth.transactionCount === 0) return;
 
-  const fixedExpenses = await getFixedExpenses(user.id);
+  const fixedExpenses = await getFixedExpenses(queryIds);
 
   const analysis = await analyzeFinances({
     currentMonth: comparison.currentMonth,

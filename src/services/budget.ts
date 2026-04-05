@@ -127,14 +127,15 @@ export async function getPersonBreakdown(userIds: string[], date?: Date): Promis
   }));
 }
 
-export async function getFixedExpenses(userId: string) {
+export async function getFixedExpenses(userId: string | string[]) {
+  const userIds = Array.isArray(userId) ? userId : [userId];
   return prisma.fixedExpense.findMany({
-    where: { userId, isActive: true },
+    where: { userId: { in: userIds }, isActive: true },
     orderBy: { amount: "desc" },
   });
 }
 
-export async function getFixedExpensesTotal(userId: string): Promise<number> {
+export async function getFixedExpensesTotal(userId: string | string[]): Promise<number> {
   const expenses = await getFixedExpenses(userId);
   return expenses.reduce((sum, e) => sum + e.amount, 0);
 }
