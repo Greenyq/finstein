@@ -100,6 +100,7 @@ export function startScheduler(bot: Bot): void {
   });
 
   // Daily recurring expenses: every day at 8:00 AM, add expenses whose dayOfMonth matches today
+  // Also backfills any missed expenses for the current month
   cron.schedule("0 8 * * *", async () => {
     const today = new Date().getDate();
     console.log(`Running daily recurring expenses for day ${today}...`);
@@ -107,6 +108,12 @@ export function startScheduler(bot: Bot): void {
       const users = await prisma.user.findMany();
       for (const user of users) {
         try {
+          // First backfill any missed expenses from earlier in the month
+          const backfilled = await backfillMonthlyRecurring(user.id);
+          if (backfilled > 0) {
+            console.log(`Backfilled ${backfilled} missed recurring expenses for user ${user.id}`);
+          }
+          // Then add today's expenses (backfill already covers today, but this is a safety net)
           await autoAddDailyRecurring(user.id, today);
         } catch (error) {
           console.error(`Recurring expense failed for user ${user.id}:`, error);
@@ -117,10 +124,28 @@ export function startScheduler(bot: Bot): void {
     }
   });
 
+  // On startup: backfill any missed recurring expenses for the current month
+  console.log("Backfilling missed recurring expenses on startup...");
+  prisma.user.findMany().then(async (users) => {
+    for (const user of users) {
+      try {
+        const backfilled = await backfillMonthlyRecurring(user.id);
+        if (backfilled > 0) {
+          console.log(`Startup backfill: added ${backfilled} missed recurring expenses for user ${user.id}`);
+        }
+      } catch (error) {
+        console.error(`Startup backfill failed for user ${user.id}:`, error);
+      }
+    }
+    console.log("Startup backfill complete.");
+  }).catch((error) => {
+    console.error("Startup backfill failed:", error);
+  });
+
   console.log(
     "Scheduler started: monthly reports on 1st at 9AM, memory comparison on 5th at 10AM, " +
     "savings projection every Tuesday at 10AM, weekly pulse every Sunday at 7PM, " +
-    "milestone check on 3rd at 9:30AM, recurring expenses daily at 8AM",
+    "milestone check on 3rd at 9:30AM, recurring expenses daily at 8AM (with backfill)",
   );
 }
 
@@ -543,4 +568,64 @@ async function autoAddDailyRecurring(userId: string, dayOfMonth: number): Promis
       },
     });
   }
+}
+
+/**
+ * Backfill missed fixed expenses for the current month.
+ * Checks all active fixed expenses where dayOfMonth <= today,
+ * and creates transactions for any that are missing this month.
+ */
+export async function backfillMonthlyRecurring(userId: string): Promise<number> {
+  const now = new Date();
+  const todayDay = now.getDate();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Get all active fixed expenses whose day has already passed (or is today)
+  const expenses = await prisma.fixedExpense.findMany({
+    where: {
+      userId,
+      isActive: true,
+      dayOfMonth: { lte: todayDay },
+    },
+  });
+
+  if (expenses.length === 0) return 0;
+
+  // Get all recurring transactions already added this month
+  const existingTx = await prisma.transaction.findMany({
+    where: {
+      userId,
+      rawMessage: { startsWith: "[recurring] " },
+      date: { gte: monthStart, lte: monthEnd },
+      deletedAt: null,
+    },
+    select: { rawMessage: true },
+  });
+
+  const existingNames = new Set(existingTx.map((t) => t.rawMessage));
+  let added = 0;
+
+  for (const exp of expenses) {
+    const marker = `[recurring] ${exp.name}`;
+    if (existingNames.has(marker)) continue; // already exists this month
+
+    // Create the transaction on the correct day of this month
+    const expDate = new Date(now.getFullYear(), now.getMonth(), exp.dayOfMonth ?? 1, 8, 0, 0);
+
+    await prisma.transaction.create({
+      data: {
+        userId,
+        type: "expense",
+        amount: exp.amount,
+        category: exp.category,
+        description: `${exp.name} (авто)`,
+        date: expDate,
+        rawMessage: marker,
+      },
+    });
+    added++;
+  }
+
+  return added;
 }
