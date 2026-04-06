@@ -184,7 +184,7 @@ async function sendMonthlyReport(
 
 async function sendWeeklyPulse(
   bot: Bot,
-  user: { id: string; telegramId: bigint; firstName: string; language: string; timezone: string },
+  user: { id: string; telegramId: bigint; firstName: string; language: string; timezone: string; monthlyIncome: number },
 ): Promise<void> {
   const now = new Date();
   const weekStart = new Date(now);
@@ -223,11 +223,11 @@ async function sendWeeklyPulse(
     catMapPrev.set(t.category, (catMapPrev.get(t.category) ?? 0) + t.amount);
   }
 
-  const categoryBreakdown = Array.from(catMapThis.entries()).map(([category, amount]) => ({
-    category,
-    amount,
-    avgAmount: (catMapPrev.get(category) ?? 0) / 4,
-  }));
+  const categoryBreakdown = Array.from(catMapThis.entries()).map(([category, amount]) => {
+    const avgAmount = (catMapPrev.get(category) ?? 0) / 4;
+    const pctChange = avgAmount > 0 ? Math.round(((amount - avgAmount) / avgAmount) * 100) : null;
+    return { category, amount, avgAmount, pctChange };
+  });
 
   const lang = user.language === "en" ? "en" : "ru";
   const weekIncome = await prisma.transaction
@@ -264,12 +264,21 @@ async function sendWeeklyPulse(
     }
   }
 
+  // Build concise list of this week's transactions for factual grounding
+  const weekTransactions = thisWeekTx.map((t) => ({
+    amount: t.amount,
+    category: t.category,
+    description: t.description,
+  }));
+
   const message = await generateWeeklyPulse({
     userName: user.firstName,
     weekExpenses,
     weekIncome,
+    monthlyIncome: user.monthlyIncome,
     avgWeeklyExpenses,
     categoryBreakdown,
+    weekTransactions,
     // Only include savings tip data on the first Sunday of the month
     ...(isFirstSundayOfMonth && {
       fixedExpenses,
