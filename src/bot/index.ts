@@ -89,69 +89,45 @@ bot.catch((err) => {
 
 /** Register bot commands with Telegram (shows in the menu) */
 async function setBotCommands() {
-  // Russian commands
+  // Russian commands — compact menu, rest accessible via /help
   await bot.api.setMyCommands(
     [
       { command: "status", description: "Сводка за месяц" },
+      { command: "history", description: "Записи (редактировать/удалить)" },
       { command: "chart", description: "Графики расходов" },
       { command: "report", description: "AI-анализ финансов" },
-      { command: "history", description: "История (редактировать/удалить)" },
-      { command: "trash", description: "Корзина (восстановить)" },
-      { command: "limit", description: "Лимиты по категориям" },
-      { command: "recurring", description: "Постоянные расходы" },
-      { command: "setup", description: "Настройки дохода" },
-      { command: "export", description: "Экспорт в Excel" },
-      { command: "invite", description: "Пригласить в семью" },
-      { command: "join", description: "Присоединиться к семье" },
-      { command: "leave", description: "Выйти из семьи" },
-      { command: "family", description: "Участники семьи" },
-      { command: "lang", description: "Сменить язык (RU/EN)" },
       { command: "undo", description: "Отменить последнюю запись" },
+      { command: "export", description: "Экспорт в Excel" },
+      { command: "setup", description: "Настройки" },
       { command: "help", description: "Все команды" },
     ],
     { language_code: "ru" }
   );
 
-  // English commands
+  // English commands — compact menu
   await bot.api.setMyCommands(
     [
       { command: "status", description: "Monthly summary" },
+      { command: "history", description: "Transactions (edit/delete)" },
       { command: "chart", description: "Expense charts" },
       { command: "report", description: "AI financial analysis" },
-      { command: "history", description: "Transactions (edit/delete)" },
-      { command: "trash", description: "Trash (restore deleted)" },
-      { command: "limit", description: "Category spending limits" },
-      { command: "recurring", description: "Fixed expenses" },
-      { command: "setup", description: "Income settings" },
-      { command: "export", description: "Export to Excel" },
-      { command: "invite", description: "Invite to family budget" },
-      { command: "join", description: "Join a family budget" },
-      { command: "leave", description: "Leave family budget" },
-      { command: "family", description: "Family members" },
-      { command: "lang", description: "Change language (RU/EN)" },
       { command: "undo", description: "Undo last entry" },
+      { command: "export", description: "Export to Excel" },
+      { command: "setup", description: "Settings" },
       { command: "help", description: "All commands" },
     ],
     { language_code: "en" }
   );
 
-  // Default commands (fallback)
+  // Default commands (fallback) — compact menu
   await bot.api.setMyCommands([
     { command: "status", description: "Monthly summary / Сводка" },
+    { command: "history", description: "Transactions / Записи" },
     { command: "chart", description: "Expense charts / Графики" },
     { command: "report", description: "AI analysis / AI-анализ" },
-    { command: "history", description: "Transactions / История" },
-    { command: "trash", description: "Trash / Корзина" },
-    { command: "limit", description: "Budget limits / Лимиты" },
-    { command: "setup", description: "Settings / Настройки" },
-    { command: "export", description: "Export to Excel / Экспорт" },
-    { command: "invite", description: "Invite family / Пригласить" },
-    { command: "join", description: "Join family / Присоединиться" },
-    { command: "leave", description: "Leave family / Выйти из семьи" },
-    { command: "family", description: "Family members / Участники" },
-    { command: "recurring", description: "Fixed expenses / Постоянные" },
-    { command: "lang", description: "Language / Язык (RU/EN)" },
     { command: "undo", description: "Undo / Отменить" },
+    { command: "export", description: "Export / Экспорт" },
+    { command: "setup", description: "Settings / Настройки" },
     { command: "help", description: "All commands / Все команды" },
   ]);
 

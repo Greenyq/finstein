@@ -79,6 +79,7 @@ Use descriptive account names. Recognize both English and Russian account names.
 
 If the user wants to EDIT an existing transaction — this includes conversational corrections, fixing amounts, changing categories, etc.
 IMPORTANT: Even if the message is conversational (e.g. "no that's wrong, it was 58", "delete it, you wrote it wrong, from 78 to 58"), you MUST parse it as an edit or delete, NOT as unknown.
+IMPORTANT: If the user says something VAGUE like "поправь транзакцию", "edit a transaction", "хочу исправить запись", "need to fix something" — return edit_transaction with target "last" and EMPTY changes {}. The bot will show them a list to choose from.
 
 Examples of EDIT messages (ALL should return edit_transaction):
 - "измени последнюю транзакцию на 50" → target: "last", changes: { amount: 50 }
@@ -90,6 +91,10 @@ Examples of EDIT messages (ALL should return edit_transaction):
 - "нет, неправильно, было 58 а не 78" → target: "78", changes: { amount: 58 }
 - "это не 78 а 58.36" → target: "78", changes: { amount: 58.36 }
 - "change it to health category" → target: "last", changes: { category: "Health" }
+- "поправь транзакцию" → target: "last", changes: {}
+- "хочу исправить" → target: "last", changes: {}
+- "edit a transaction" → target: "last", changes: {}
+- "нужно поправить запись" → target: "last", changes: {}
 
 {
   "type": "edit_transaction",
@@ -108,11 +113,19 @@ Examples:
 - "убери последнюю трату" → target: "last"
 - "удали 78 долларов за лекарства" → target: "78"
 - "remove it" → target: "last"
+- "хочу удалить транзакцию" → target: "browse" (vague — user wants to choose)
+- "удали транзакцию" → target: "browse"
+- "нужно удалить запись" → target: "browse"
 
 {
   "type": "delete_transaction",
-  "target": string (what to find — "last", or keyword like "shoppers", "groceries 78")
+  "target": string (what to find — "last", "browse" (if vague/no specifics), or keyword like "shoppers", "groceries 78")
 }
+
+NAVIGATION / COMMAND INTENTS — when user asks to see something that maps to a bot command:
+- "покажи историю" / "show history" / "мои записи" / "what did I record" → { "type": "query", "queryType": "summary", "period": "current_month", "category": null, "rawMessage": "..." }
+- "покажи статус" / "как дела с бюджетом" / "show status" → same as above
+- These should NOT return "unknown" — map them to a query so the bot can answer
 
 PRIORITY: If a message contains BOTH "delete/remove" AND a new amount/correction, treat it as edit_transaction (user wants to fix, not just delete).
 

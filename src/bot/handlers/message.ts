@@ -16,6 +16,54 @@ import { getPendingEdit, processPendingEdit } from "./transaction.js";
 import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
 
+/**
+ * Show recent transactions with edit/delete buttons (reusable mini-history).
+ * Used when user says something vague like "поправь транзакцию" or "удали запись".
+ */
+async function showTransactionPicker(
+  ctx: AuthContext,
+  userId: string | string[],
+  mode: "edit" | "delete",
+  ru: boolean,
+): Promise<void> {
+  const transactions = await getRecentTransactions(userId, 5);
+
+  if (transactions.length === 0) {
+    await ctx.reply(
+      ru ? "Транзакций пока нет." : "No transactions yet.",
+      { parse_mode: "Markdown" },
+    );
+    return;
+  }
+
+  const title = mode === "edit"
+    ? (ru ? "*Какую запись исправить?*" : "*Which entry to edit?*")
+    : (ru ? "*Какую запись удалить?*" : "*Which entry to delete?*");
+
+  let message = title + "\n\n";
+  const keyboard = new InlineKeyboard();
+
+  for (const [i, tx] of transactions.entries()) {
+    const sign = tx.type === "income" ? "+" : "-";
+    const day = tx.date.getDate();
+    const month = tx.date.toLocaleString(ru ? "ru-RU" : "en-CA", { month: "short" });
+
+    message += `*${i + 1}.* ${sign}${formatCurrency(tx.amount)} — ${tx.category}`;
+    const parts: string[] = [];
+    if (tx.description) parts.push(tx.description);
+    parts.push(`${day} ${month}`);
+    message += `\n      _${parts.join(" · ")}_\n\n`;
+
+    if (mode === "edit") {
+      keyboard.text(`✏️ ${i + 1}`, `tx_edit_${tx.id}`).row();
+    } else {
+      keyboard.text(`🗑 ${i + 1}`, `tx_del_${tx.id}`).row();
+    }
+  }
+
+  await ctx.reply(message, { parse_mode: "Markdown", reply_markup: keyboard });
+}
+
 export async function handleTextMessage(ctx: AuthContext, textOverride?: string): Promise<void> {
   const text = (textOverride ?? ctx.message?.text)?.trim();
   if (!text) return;
@@ -203,28 +251,35 @@ async function executeSingleAction(
   }
 
   if (result.type === "edit_transaction") {
+    const changes = result.changes;
+    // Vague edit request (no specific changes) — show picker
+    if (!changes.amount && !changes.category && !changes.description) {
+      await showTransactionPicker(ctx, queryIds, "edit", ru);
+      return null;
+    }
     const tx = await findTransactionByTarget(queryIds, result.target);
     if (!tx) {
       return ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
     }
-    const changes = result.changes;
-    if (changes.amount || changes.category || changes.description) {
-      await updateTransaction(tx.id, {
-        amount: changes.amount ?? undefined,
-        category: changes.category ?? undefined,
-        description: changes.description !== undefined ? changes.description : undefined,
-      });
-      clearReportCache(ctx.dbUser.id);
-      const updated = { ...tx, ...changes };
-      const sign = updated.type === "income" ? "+" : "-";
-      return ru
-        ? `✅ Обновлено: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`
-        : `✅ Updated: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`;
-    }
-    return null;
+    await updateTransaction(tx.id, {
+      amount: changes.amount ?? undefined,
+      category: changes.category ?? undefined,
+      description: changes.description !== undefined ? changes.description : undefined,
+    });
+    clearReportCache(ctx.dbUser.id);
+    const updated = { ...tx, ...changes };
+    const sign = updated.type === "income" ? "+" : "-";
+    return ru
+      ? `✅ Обновлено: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`
+      : `✅ Updated: ${sign}${formatCurrency(updated.amount ?? tx.amount)} — ${updated.category ?? tx.category}`;
   }
 
   if (result.type === "delete_transaction") {
+    // Vague delete request — show picker
+    if (result.target === "browse") {
+      await showTransactionPicker(ctx, queryIds, "delete", ru);
+      return null;
+    }
     const tx = await findTransactionByTarget(queryIds, result.target);
     if (!tx) {
       return ru ? "Не нашёл такую транзакцию." : "Transaction not found.";
