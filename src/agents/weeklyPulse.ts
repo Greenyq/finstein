@@ -6,11 +6,18 @@ export interface WeeklyPulseInput {
   userName: string;
   weekExpenses: number;
   weekIncome: number;
+  monthlyIncome: number;
   avgWeeklyExpenses: number;
   categoryBreakdown: Array<{
     category: string;
     amount: number;
-    avgAmount: number; // average over the past 4 weeks for this category
+    avgAmount: number;
+    pctChange: number | null; // pre-computed % change vs 4-week avg, null if no prior data
+  }>;
+  weekTransactions?: Array<{
+    amount: number;
+    category: string;
+    description: string | null;
   }>;
   fixedExpenses?: Array<{
     name: string;
