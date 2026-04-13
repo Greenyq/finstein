@@ -1,7 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
-import { getEnv } from "../../utils/env.js";
+import { createMessage } from "../../utils/anthropic.js";
 import { createTransaction } from "../../services/transaction.js";
 import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { clearReportCache } from "../commands/report.js";
@@ -24,10 +23,7 @@ async function parseReceiptImage(
   mediaType: "image/jpeg" | "image/png" | "image/webp",
   today: string
 ): Promise<ReceiptParseResult> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 512,
     messages: [

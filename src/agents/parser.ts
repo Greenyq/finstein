@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 import { getParserSystemPrompt } from "../utils/prompts.js";
 import { getTodayStringInTimezone } from "../utils/formatting.js";
 
@@ -64,12 +63,9 @@ export type ParserResult =
   | ParsedCompoundAction;
 
 export async function parseMessage(message: string, existingAccounts?: string[], timezone = "America/Winnipeg", messageDate = new Date()): Promise<ParserResult> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
   const today = getTodayStringInTimezone(timezone, messageDate);
 
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 512,
     system: getParserSystemPrompt(today, existingAccounts),

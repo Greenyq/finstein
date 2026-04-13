@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 import { SAVINGS_PROJECTION_SYSTEM_PROMPT } from "../utils/prompts.js";
 
 export interface SavingsProjectionInput {
@@ -15,10 +14,7 @@ export interface SavingsProjectionInput {
 }
 
 export async function generateSavingsProjection(input: SavingsProjectionInput): Promise<string> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 400,
     system: SAVINGS_PROJECTION_SYSTEM_PROMPT,

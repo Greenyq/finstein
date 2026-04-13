@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 
 function getResponderPrompt(ru: boolean): string {
   return `You are Finstein, a smart family finance assistant on Telegram.
@@ -58,10 +57,7 @@ export async function respondToQuery(
   ru: boolean,
   todayLabel?: string,
 ): Promise<string> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 512,
     system: getResponderPrompt(ru),
