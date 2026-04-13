@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
-import { createMessage } from "../../utils/anthropic.js";
+import { createMessage, formatApiError } from "../../utils/anthropic.js";
 import { createTransaction } from "../../services/transaction.js";
 import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { clearReportCache } from "../commands/report.js";
@@ -188,7 +188,7 @@ export async function handlePhotoMessage(ctx: AuthContext): Promise<void> {
   } catch (error) {
     console.error("Photo handling failed:", {
       userId: ctx.dbUser.id,
-      error,
+      error: formatApiError(error),
     });
     await ctx.reply(
       ru
