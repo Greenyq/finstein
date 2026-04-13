@@ -31,7 +31,7 @@ export async function createMessage(
         const delay = BASE_DELAY_MS * Math.pow(2, attempt);
         console.warn(
           `Anthropic API ${status} (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delay}ms...`,
-          { type: apiErr?.error, request_id: apiErr?.request_id },
+          { type: apiErr?.error, request_id: apiErr?.requestID },
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
         attempt++;
@@ -44,7 +44,7 @@ export async function createMessage(
           status: apiErr.status,
           message: apiErr.message,
           error: apiErr.error,
-          request_id: apiErr.request_id,
+          request_id: apiErr.requestID,
         });
       }
       throw err;
