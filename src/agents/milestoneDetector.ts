@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 import { MILESTONE_CELEBRATION_SYSTEM_PROMPT } from "../utils/prompts.js";
 
 export type MilestoneKey =
@@ -21,10 +20,7 @@ export interface MilestoneInput {
 }
 
 export async function generateMilestoneCelebration(input: MilestoneInput): Promise<string> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 300,
     system: MILESTONE_CELEBRATION_SYSTEM_PROMPT,

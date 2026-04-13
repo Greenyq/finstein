@@ -1,5 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 import { ANALYZER_SYSTEM_PROMPT } from "../utils/prompts.js";
 import type { MonthSummary } from "../services/budget.js";
 
@@ -36,10 +35,7 @@ interface AnalyzerInput {
 }
 
 export async function analyzeFinances(input: AnalyzerInput): Promise<AnalysisResult> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
     system: ANALYZER_SYSTEM_PROMPT,

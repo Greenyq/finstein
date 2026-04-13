@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
-import { getEnv } from "../utils/env.js";
+import { createMessage } from "../utils/anthropic.js";
 import { getAllCategories } from "../utils/categories.js";
 
 interface ParsedRow {
@@ -74,8 +74,6 @@ export async function extractTransactionsFromSheets(
   currency: string,
   year: number = new Date().getFullYear()
 ): Promise<FileTransaction[]> {
-  const env = getEnv();
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const categories = getAllCategories();
 
   const allTransactions: FileTransaction[] = [];
@@ -89,7 +87,7 @@ export async function extractTransactionsFromSheets(
 
     let response;
     try {
-      response = await client.messages.create({
+      response = await createMessage({
         model: "claude-sonnet-4-20250514",
         max_tokens: 4096,
         system: `You are a financial data parser. Extract ALL individual transactions from spreadsheet data.
@@ -122,14 +120,13 @@ Rules:
         ],
       });
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-
-      // Rate limit — wait and retry once
-      if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+      // Rate limit — wait 60s and retry once with a leaner prompt
+      const isRateLimit = err instanceof Anthropic.APIError && err.status === 429;
+      if (isRateLimit) {
         console.log(`Rate limited on sheet "${sheet.sheetName}", waiting 60s...`);
         await new Promise((r) => setTimeout(r, 60_000));
         try {
-          response = await client.messages.create({
+          response = await createMessage({
             model: "claude-sonnet-4-20250514",
             max_tokens: 4096,
             system: `You are a financial data parser. Extract ALL individual transactions from CSV spreadsheet data.
@@ -151,6 +148,7 @@ Rules: extract every individual transaction. EXACT amounts. Skip totals/headers.
         }
       } else {
         // Any other API error — stop immediately
+        const errMsg = err instanceof Error ? err.message : String(err);
         throw new Error(`API error on sheet "${sheet.sheetName}": ${errMsg}`);
       }
     }
