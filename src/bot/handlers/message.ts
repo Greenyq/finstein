@@ -15,6 +15,7 @@ import { getFixedExpenses } from "../../services/budget.js";
 import { getPendingEdit, processPendingEdit } from "./transaction.js";
 import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
+import { formatApiError } from "../../utils/anthropic.js";
 
 /**
  * Show recent transactions with edit/delete buttons (reusable mini-history).
@@ -220,7 +221,7 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     console.error("Message handling failed:", {
       userId: ctx.dbUser.id,
       message: text,
-      error,
+      error: formatApiError(error),
     });
     await ctx.reply(t("msg.error", lang)());
   }

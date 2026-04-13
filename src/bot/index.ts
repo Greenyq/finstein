@@ -28,6 +28,7 @@ import { handlePhotoMessage } from "./handlers/photo.js";
 import { handleDocumentMessage, handleFileImportConfirm, handleFileImportReplace, handleFileImportCancel, handleSheetToggle, handleSheetImportGo, setDocumentBotInstance } from "./handlers/document.js";
 import { handleTxDeleteCallback, handleTxRestoreCallback, handleTxEditCallback, handleTxEditFieldCallback, handleTxEditCancelCallback } from "./handlers/transaction.js";
 import { startScheduler } from "../services/scheduler.js";
+import { formatApiError } from "../utils/anthropic.js";
 
 const env = getEnv();
 
@@ -83,7 +84,7 @@ bot.on("message:document", (ctx) => handleDocumentMessage(ctx as AuthContext));
 
 // Error handler
 bot.catch((err) => {
-  console.error("Bot error:", err.error);
+  console.error("Bot error:", formatApiError(err.error));
   console.error("Update that caused error:", JSON.stringify(err.ctx.update, null, 2));
 });
 
