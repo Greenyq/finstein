@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 
 function getResponderPrompt(ru: boolean): string {
   return `You are Finstein, a smart family finance assistant on Telegram.
@@ -58,7 +58,7 @@ export async function respondToQuery(
   todayLabel?: string,
 ): Promise<string> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 512,
     system: getResponderPrompt(ru),
     messages: [

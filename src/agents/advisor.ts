@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { ADVISOR_SYSTEM_PROMPT } from "../utils/prompts.js";
 import type { AnalysisResult } from "./analyzer.js";
 
@@ -8,7 +8,7 @@ export async function generateAdvice(analysis: AnalysisResult, lang: string = "e
     : "IMPORTANT: Respond entirely in English.";
 
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: ADVISOR_SYSTEM_PROMPT + "\n\n" + langInstruction,
     messages: [

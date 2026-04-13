@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { WEEKLY_PULSE_SYSTEM_PROMPT } from "../utils/prompts.js";
 
 export interface WeeklyPulseInput {
@@ -33,7 +33,7 @@ export interface WeeklyPulseInput {
 
 export async function generateWeeklyPulse(input: WeeklyPulseInput): Promise<string> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 600,
     system: WEEKLY_PULSE_SYSTEM_PROMPT,
     messages: [{ role: "user", content: JSON.stringify(input, null, 2) }],

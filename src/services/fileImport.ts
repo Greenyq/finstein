@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { getAllCategories } from "../utils/categories.js";
 
 interface ParsedRow {
@@ -88,7 +88,7 @@ export async function extractTransactionsFromSheets(
     let response;
     try {
       response = await createMessage({
-        model: "claude-sonnet-4-20250514",
+        model: CLAUDE_MODEL,
         max_tokens: 4096,
         system: `You are a financial data parser. Extract ALL individual transactions from spreadsheet data.
 
@@ -127,7 +127,7 @@ Rules:
         await new Promise((r) => setTimeout(r, 60_000));
         try {
           response = await createMessage({
-            model: "claude-sonnet-4-20250514",
+            model: CLAUDE_MODEL,
             max_tokens: 4096,
             system: `You are a financial data parser. Extract ALL individual transactions from CSV spreadsheet data.
 

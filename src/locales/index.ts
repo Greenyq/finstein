@@ -248,6 +248,10 @@ const translations = {
     ru: () => "Произошла ошибка. Попробуйте ещё раз.",
     en: () => "Something went wrong. Please try again.",
   },
+  "msg.overloaded": {
+    ru: () => "⚠️ ИИ сейчас перегружен. Подожди минуту и попробуй снова.",
+    en: () => "⚠️ AI is temporarily overloaded. Please try again in a minute.",
+  },
   "msg.wallet_updated": {
     ru: (total: string) => `Балансы обновлены:\n\n_Итого: ${total}_`,
     en: (total: string) => `Balances updated:\n\n_Total: ${total}_`,

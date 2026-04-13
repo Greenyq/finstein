@@ -1,11 +1,13 @@
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
-import { createMessage, formatApiError } from "../../utils/anthropic.js";
+import Anthropic from "@anthropic-ai/sdk";
+import { createMessage, formatApiError, CLAUDE_MODEL } from "../../utils/anthropic.js";
 import { createTransaction } from "../../services/transaction.js";
 import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { clearReportCache } from "../commands/report.js";
 import { checkBudgetLimits } from "../commands/limit.js";
 import type { Lang } from "../../locales/index.js";
+import { t } from "../../locales/index.js";
 import { CATEGORIES } from "../../utils/categories.js";
 
 interface ReceiptParseResult {
@@ -24,7 +26,7 @@ async function parseReceiptImage(
   today: string
 ): Promise<ReceiptParseResult> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 512,
     messages: [
       {
@@ -186,6 +188,11 @@ export async function handlePhotoMessage(ctx: AuthContext): Promise<void> {
 
     await ctx.reply(reply, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {
+    const isOverloaded = error instanceof Anthropic.APIError && error.status === 529;
+    if (isOverloaded) {
+      await ctx.reply(t("msg.overloaded", lang)());
+      return;
+    }
     console.error("Photo handling failed:", {
       userId: ctx.dbUser.id,
       error: formatApiError(error),
