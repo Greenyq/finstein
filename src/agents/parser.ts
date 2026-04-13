@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { getParserSystemPrompt } from "../utils/prompts.js";
 import { getTodayStringInTimezone } from "../utils/formatting.js";
 
@@ -66,7 +66,7 @@ export async function parseMessage(message: string, existingAccounts?: string[],
   const today = getTodayStringInTimezone(timezone, messageDate);
 
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 512,
     system: getParserSystemPrompt(today, existingAccounts),
     messages: [{ role: "user", content: message }],

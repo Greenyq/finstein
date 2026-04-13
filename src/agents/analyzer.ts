@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { ANALYZER_SYSTEM_PROMPT } from "../utils/prompts.js";
 import type { MonthSummary } from "../services/budget.js";
 
@@ -36,7 +36,7 @@ interface AnalyzerInput {
 
 export async function analyzeFinances(input: AnalyzerInput): Promise<AnalysisResult> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: ANALYZER_SYSTEM_PROMPT,
     messages: [

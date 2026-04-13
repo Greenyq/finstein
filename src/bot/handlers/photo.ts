@@ -1,7 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { AuthContext } from "../middleware/auth.js";
 import Anthropic from "@anthropic-ai/sdk";
-import { createMessage, formatApiError } from "../../utils/anthropic.js";
+import { createMessage, formatApiError, CLAUDE_MODEL } from "../../utils/anthropic.js";
 import { createTransaction } from "../../services/transaction.js";
 import { formatCurrency, getTodayStringInTimezone } from "../../utils/formatting.js";
 import { clearReportCache } from "../commands/report.js";
@@ -26,7 +26,7 @@ async function parseReceiptImage(
   today: string
 ): Promise<ReceiptParseResult> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 512,
     messages: [
       {

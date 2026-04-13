@@ -1,4 +1,4 @@
-import { createMessage } from "../utils/anthropic.js";
+import { createMessage, CLAUDE_MODEL } from "../utils/anthropic.js";
 import { MEMORY_COMPARISON_SYSTEM_PROMPT } from "../utils/prompts.js";
 
 export interface MemoryComparisonInput {
@@ -21,7 +21,7 @@ export interface MemoryComparisonInput {
 
 export async function generateMemoryComparison(input: MemoryComparisonInput): Promise<string> {
   const response = await createMessage({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 400,
     system: MEMORY_COMPARISON_SYSTEM_PROMPT,
     messages: [{ role: "user", content: JSON.stringify(input, null, 2) }],

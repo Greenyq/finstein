@@ -1,6 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getEnv } from "./env.js";
 
+/** Single source of truth for the model used across all agents. */
+export const CLAUDE_MODEL = "claude-sonnet-4-6";
+
 /**
  * Per-call SDK timeout. Each individual Anthropic API attempt is capped here
  * so retries still fit inside Telegram's 55-second webhook window.
