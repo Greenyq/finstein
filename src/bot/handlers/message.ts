@@ -16,6 +16,7 @@ import { getPendingEdit, processPendingEdit } from "./transaction.js";
 import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
 import { formatApiError } from "../../utils/anthropic.js";
+import Anthropic from "@anthropic-ai/sdk";
 
 /**
  * Show recent transactions with edit/delete buttons (reusable mini-history).
@@ -218,6 +219,11 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
       await ctx.reply(reply, { parse_mode: "Markdown" });
     }
   } catch (error) {
+    const isOverloaded = error instanceof Anthropic.APIError && error.status === 529;
+    if (isOverloaded) {
+      await ctx.reply(t("msg.overloaded", lang)());
+      return;
+    }
     console.error("Message handling failed:", {
       userId: ctx.dbUser.id,
       message: text,
