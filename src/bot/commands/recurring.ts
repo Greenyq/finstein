@@ -6,6 +6,77 @@ export async function recurringCommand(ctx: AuthContext): Promise<void> {
   const text = ctx.message?.text ?? "";
   const args = text.replace(/^\/recurring\s*/i, "").trim();
 
+  // Bulk add from multi-line message:
+  // /recurring add Name 100 1
+  // /recurring add Name2 200 1
+  if (args.includes("\n")) {
+    const lines = args
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => l.replace(/^\/recurring\s*/i, ""));
+
+    const addLines = lines
+      .map((line) => line.match(/^add\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(\d+)?\s*$/i))
+      .filter(Boolean) as RegExpMatchArray[];
+
+    if (addLines.length > 0 && addLines.length === lines.length) {
+      let created = 0;
+      let skipped = 0;
+      const addedItems: string[] = [];
+
+      for (const m of addLines) {
+        const name = m[1]!.trim();
+        const amount = parseFloat(m[2]!);
+        const dayOfMonth = m[3] ? parseInt(m[3]) : 1;
+
+        if (dayOfMonth < 1 || dayOfMonth > 28) {
+          skipped++;
+          continue;
+        }
+
+        const existing = await prisma.fixedExpense.findFirst({
+          where: {
+            userId: ctx.dbUser.id,
+            name: { equals: name, mode: "insensitive" },
+            isActive: true,
+          },
+        });
+
+        if (existing) {
+          await prisma.fixedExpense.update({
+            where: { id: existing.id },
+            data: { amount, dayOfMonth },
+          });
+          addedItems.push(`• ${existing.name} — ${formatCurrency(amount)} (${dayOfMonth}-й) ✏️`);
+          continue;
+        }
+
+        await prisma.fixedExpense.create({
+          data: {
+            userId: ctx.dbUser.id,
+            name,
+            amount,
+            category: inferCategory(name),
+            dayOfMonth,
+            isActive: true,
+          },
+        });
+        created++;
+        addedItems.push(`• ${name} — ${formatCurrency(amount)} (${dayOfMonth}-й)`);
+      }
+
+      const updated = addedItems.length - created;
+      let msg = `✅ Обработал список регулярных расходов.\n\n`;
+      if (created > 0) msg += `Добавлено: *${created}*\n`;
+      if (updated > 0) msg += `Обновлено: *${updated}*\n`;
+      if (skipped > 0) msg += `Пропущено (день не 1..28): *${skipped}*\n`;
+      msg += `\n${addedItems.join("\n")}`;
+      await ctx.reply(msg, { parse_mode: "Markdown" });
+      return;
+    }
+  }
+
   // No args — show list
   if (!args) {
     const expenses = await prisma.fixedExpense.findMany({
