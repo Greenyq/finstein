@@ -149,6 +149,10 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     }
   }
 
+  // Natural-language edit/remove for existing recurring expenses (before generic tx edit/delete)
+  const recurringHandled = await handleRecurringNaturalLanguage(ctx, text);
+  if (recurringHandled) return;
+
   // Explicit user request: "carry/transfer recurring mandatory expenses now"
   if (looksLikeRecurringCarryRequest(text)) {
     const added = await backfillMonthlyRecurring(ctx.dbUser.id);
@@ -351,6 +355,48 @@ function inferRecurringCategory(name: string): string {
   if (/телефон|phone|mobile|internet|интернет/.test(lower)) return "Utilities";
   if (/авто|car|loan|кредит/.test(lower)) return "Car";
   return "Other";
+}
+
+async function handleRecurringNaturalLanguage(ctx: AuthContext, text: string): Promise<boolean> {
+  const lower = text.toLowerCase();
+  const isEdit = /(измени|поменяй|исправ|change|update|set)/i.test(lower);
+  const isRemove = /(удали|убери|remove|delete)/i.test(lower);
+  if (!isEdit && !isRemove) return false;
+
+  const active = await prisma.fixedExpense.findMany({
+    where: { userId: ctx.dbUser.id, isActive: true },
+    orderBy: { id: "desc" },
+  });
+  if (active.length === 0) return false;
+
+  const target = active.find((e) => lower.includes(e.name.toLowerCase()));
+  if (!target) return false;
+
+  if (isRemove) {
+    await prisma.fixedExpense.update({
+      where: { id: target.id },
+      data: { isActive: false },
+    });
+    await ctx.reply(`❌ Удалено из регулярных: *${target.name}* — ${formatCurrency(target.amount)}`, { parse_mode: "Markdown" });
+    return true;
+  }
+
+  const nums = [...text.matchAll(/\$?\d+(?:[.,]\d{1,2})?/g)]
+    .map((m) => parseFloat(m[0].replace("$", "").replace(",", ".")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (nums.length === 0) return false;
+
+  // For "с 350 на 480" use the last number as new value.
+  const newAmount = nums[nums.length - 1]!;
+  await prisma.fixedExpense.update({
+    where: { id: target.id },
+    data: { amount: newAmount },
+  });
+  await ctx.reply(
+    `✏️ Обновлено в регулярных: *${target.name}* ${formatCurrency(target.amount)} → *${formatCurrency(newAmount)}*`,
+    { parse_mode: "Markdown" },
+  );
+  return true;
 }
 
 /**
