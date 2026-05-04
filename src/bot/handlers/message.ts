@@ -18,6 +18,7 @@ import { t, detectLang } from "../../locales/index.js";
 import { formatApiError } from "../../utils/anthropic.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { backfillMonthlyRecurring } from "../../services/scheduler.js";
+import { prisma } from "../../db/prisma.js";
 
 /**
  * Show recent transactions with edit/delete buttons (reusable mini-history).
@@ -96,6 +97,56 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   if (!isLikelyFinancial(text)) {
     await ctx.reply(t("msg.not_financial", lang)(), { parse_mode: "Markdown" });
     return;
+  }
+
+  // Explicit user request: add a list of mandatory/recurring expenses from one message
+  if (looksLikeRecurringAddRequest(text)) {
+    const parsed = extractRecurringExpensesFromText(text);
+    const lang = (ctx.dbUser.language || detectLang(text)) as Lang;
+    const ru = lang === "ru";
+
+    if (parsed.length > 0) {
+      let created = 0;
+      let updated = 0;
+      for (const item of parsed) {
+        const existing = await prisma.fixedExpense.findFirst({
+          where: {
+            userId: ctx.dbUser.id,
+            name: { equals: item.name, mode: "insensitive" },
+            isActive: true,
+          },
+        });
+
+        if (existing) {
+          await prisma.fixedExpense.update({
+            where: { id: existing.id },
+            data: { amount: item.amount, dayOfMonth: existing.dayOfMonth ?? 1 },
+          });
+          updated++;
+          continue;
+        }
+
+        await prisma.fixedExpense.create({
+          data: {
+            userId: ctx.dbUser.id,
+            name: item.name,
+            amount: item.amount,
+            category: item.category,
+            dayOfMonth: 1,
+            isActive: true,
+          },
+        });
+        created++;
+      }
+
+      await ctx.reply(
+        ru
+          ? `✅ Добавил обязательные расходы: *${created}*, обновил существующие: *${updated}*.\n\nПроверить: /recurring`
+          : `✅ Added mandatory expenses: *${created}*, updated existing: *${updated}*.\n\nCheck: /recurring`,
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
   }
 
   // Explicit user request: "carry/transfer recurring mandatory expenses now"
@@ -265,6 +316,41 @@ function looksLikeRecurringCarryRequest(text: string): boolean {
   const recurringWords = /(регулярн|постоянн|обязательн|ипотек|аренд|кредит|подписк|коммунал|fixed|recurring|mortgage|rent|loan|subscription|utilities)/i;
 
   return carryWords.test(lower) && recurringWords.test(lower);
+}
+
+function looksLikeRecurringAddRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const addWords = /(добав|занес|запиши|сделай|add|save|record)/i;
+  const recurringWords = /(обязательн|регулярн|постоянн|fixed|recurring|monthly)/i;
+  const hasAmount = /\$?\d+([.,]\d{1,2})?/.test(lower);
+  return addWords.test(lower) && recurringWords.test(lower) && hasAmount;
+}
+
+function extractRecurringExpensesFromText(text: string): Array<{ name: string; amount: number; category: string }> {
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/^[\s\-•*]+/, "").trim())
+    .filter(Boolean);
+
+  const result: Array<{ name: string; amount: number; category: string }> = [];
+  for (const line of lines) {
+    const m = line.match(/^(.+?):\s*\$?\s*(\d+(?:[.,]\d{1,2})?)/i);
+    if (!m) continue;
+    const name = m[1]!.replace(/[🏠🛒🚗📱💡💳]/g, "").trim();
+    const amount = parseFloat(m[2]!.replace(",", "."));
+    if (!name || !Number.isFinite(amount) || amount <= 0) continue;
+    result.push({ name, amount, category: inferRecurringCategory(name) });
+  }
+  return result;
+}
+
+function inferRecurringCategory(name: string): string {
+  const lower = name.toLowerCase();
+  if (/ипотек|mortgage|rent|аренд/.test(lower)) return "Mortgage/Rent";
+  if (/страх|insurance/.test(lower)) return "Insurance";
+  if (/телефон|phone|mobile|internet|интернет/.test(lower)) return "Utilities";
+  if (/авто|car|loan|кредит/.test(lower)) return "Car";
+  return "Other";
 }
 
 /**
