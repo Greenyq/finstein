@@ -17,6 +17,8 @@ import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
 import { formatApiError } from "../../utils/anthropic.js";
 import Anthropic from "@anthropic-ai/sdk";
+import { backfillMonthlyRecurring } from "../../services/scheduler.js";
+import { prisma } from "../../db/prisma.js";
 
 /**
  * Show recent transactions with edit/delete buttons (reusable mini-history).
@@ -94,6 +96,84 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   // Pre-filter: skip obviously non-financial messages to save API tokens
   if (!isLikelyFinancial(text)) {
     await ctx.reply(t("msg.not_financial", lang)(), { parse_mode: "Markdown" });
+    return;
+  }
+
+  // Explicit user request: add a list of mandatory/recurring expenses from one message
+  if (looksLikeRecurringAddRequest(text)) {
+    const parsed = extractRecurringExpensesFromText(text);
+    const lang = (ctx.dbUser.language || detectLang(text)) as Lang;
+    const ru = lang === "ru";
+
+    if (parsed.length > 0) {
+      let created = 0;
+      let updated = 0;
+      for (const item of parsed) {
+        const existing = await prisma.fixedExpense.findFirst({
+          where: {
+            userId: ctx.dbUser.id,
+            name: { equals: item.name, mode: "insensitive" },
+            isActive: true,
+          },
+        });
+
+        if (existing) {
+          await prisma.fixedExpense.update({
+            where: { id: existing.id },
+            data: { amount: item.amount, dayOfMonth: existing.dayOfMonth ?? 1 },
+          });
+          updated++;
+          continue;
+        }
+
+        await prisma.fixedExpense.create({
+          data: {
+            userId: ctx.dbUser.id,
+            name: item.name,
+            amount: item.amount,
+            category: item.category,
+            dayOfMonth: 1,
+            isActive: true,
+          },
+        });
+        created++;
+      }
+
+      await ctx.reply(
+        ru
+          ? `✅ Добавил обязательные расходы: *${created}*, обновил существующие: *${updated}*.\n\nПроверить: /recurring`
+          : `✅ Added mandatory expenses: *${created}*, updated existing: *${updated}*.\n\nCheck: /recurring`,
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+  }
+
+  // Natural-language edit/remove for existing recurring expenses (before generic tx edit/delete)
+  const recurringHandled = await handleRecurringNaturalLanguage(ctx, text);
+  if (recurringHandled) return;
+
+  // Explicit user request: "carry/transfer recurring mandatory expenses now"
+  if (looksLikeRecurringCarryRequest(text)) {
+    const added = await backfillMonthlyRecurring(ctx.dbUser.id);
+    const lang = (ctx.dbUser.language || detectLang(text)) as Lang;
+    const ru = lang === "ru";
+
+    if (added > 0) {
+      await ctx.reply(
+        ru
+          ? `✅ Готово — перенёс *${added}* обязательных/регулярных расходов в текущий месяц.\n\nПроверить список: /recurring`
+          : `✅ Done — I carried over *${added}* recurring/mandatory expenses into this month.\n\nCheck list: /recurring`,
+        { parse_mode: "Markdown" },
+      );
+    } else {
+      await ctx.reply(
+        ru
+          ? `ℹ️ Нечего переносить: все регулярные расходы за текущий месяц уже добавлены.\n\nПроверь /recurring или добавь новый через \`/recurring add Name Amount Day\`.`
+          : `ℹ️ Nothing to carry over: recurring expenses for this month are already added.\n\nCheck /recurring or add one via \`/recurring add Name Amount Day\`.`,
+        { parse_mode: "Markdown" },
+      );
+    }
     return;
   }
 
@@ -231,6 +311,92 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     });
     await ctx.reply(t("msg.error", lang)());
   }
+}
+
+function looksLikeRecurringCarryRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+
+  const carryWords = /(перенес|переноси|перенести|перенеси|добавь|подтян|carry|move|transfer|bring|add)/i;
+  const recurringWords = /(регулярн|постоянн|обязательн|ипотек|аренд|кредит|подписк|коммунал|fixed|recurring|mortgage|rent|loan|subscription|utilities)/i;
+
+  return carryWords.test(lower) && recurringWords.test(lower);
+}
+
+function looksLikeRecurringAddRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const addWords = /(добав|занес|запиши|сделай|add|save|record)/i;
+  const recurringWords = /(обязательн|регулярн|постоянн|fixed|recurring|monthly)/i;
+  const hasAmount = /\$?\d+([.,]\d{1,2})?/.test(lower);
+  return addWords.test(lower) && recurringWords.test(lower) && hasAmount;
+}
+
+function extractRecurringExpensesFromText(text: string): Array<{ name: string; amount: number; category: string }> {
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/^[\s\-•*]+/, "").trim())
+    .filter(Boolean);
+
+  const result: Array<{ name: string; amount: number; category: string }> = [];
+  for (const line of lines) {
+    const m = line.match(/^(.+?):\s*\$?\s*(\d+(?:[.,]\d{1,2})?)/i);
+    if (!m) continue;
+    const name = m[1]!.replace(/[🏠🛒🚗📱💡💳]/g, "").trim();
+    const amount = parseFloat(m[2]!.replace(",", "."));
+    if (!name || !Number.isFinite(amount) || amount <= 0) continue;
+    result.push({ name, amount, category: inferRecurringCategory(name) });
+  }
+  return result;
+}
+
+function inferRecurringCategory(name: string): string {
+  const lower = name.toLowerCase();
+  if (/ипотек|mortgage|rent|аренд/.test(lower)) return "Mortgage/Rent";
+  if (/страх|insurance/.test(lower)) return "Insurance";
+  if (/телефон|phone|mobile|internet|интернет/.test(lower)) return "Utilities";
+  if (/авто|car|loan|кредит/.test(lower)) return "Car";
+  return "Other";
+}
+
+async function handleRecurringNaturalLanguage(ctx: AuthContext, text: string): Promise<boolean> {
+  const lower = text.toLowerCase();
+  const isEdit = /(измени|поменяй|исправ|change|update|set)/i.test(lower);
+  const isRemove = /(удали|убери|remove|delete)/i.test(lower);
+  if (!isEdit && !isRemove) return false;
+
+  const active = await prisma.fixedExpense.findMany({
+    where: { userId: ctx.dbUser.id, isActive: true },
+    orderBy: { id: "desc" },
+  });
+  if (active.length === 0) return false;
+
+  const target = active.find((e) => lower.includes(e.name.toLowerCase()));
+  if (!target) return false;
+
+  if (isRemove) {
+    await prisma.fixedExpense.update({
+      where: { id: target.id },
+      data: { isActive: false },
+    });
+    await ctx.reply(`❌ Удалено из регулярных: *${target.name}* — ${formatCurrency(target.amount)}`, { parse_mode: "Markdown" });
+    return true;
+  }
+
+  const nums = [...text.matchAll(/\$?\d+(?:[.,]\d{1,2})?/g)]
+    .map((m) => parseFloat(m[0].replace("$", "").replace(",", ".")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (nums.length === 0) return false;
+
+  // For "с 350 на 480" use the last number as new value.
+  const newAmount = nums[nums.length - 1]!;
+  await prisma.fixedExpense.update({
+    where: { id: target.id },
+    data: { amount: newAmount },
+  });
+  await ctx.reply(
+    `✏️ Обновлено в регулярных: *${target.name}* ${formatCurrency(target.amount)} → *${formatCurrency(newAmount)}*`,
+    { parse_mode: "Markdown" },
+  );
+  return true;
 }
 
 /**
