@@ -98,6 +98,7 @@ export async function handleSetupMessage(ctx: AuthContext): Promise<boolean> {
         name,
         amount,
         category,
+        dayOfMonth: 1,
       },
     });
 
