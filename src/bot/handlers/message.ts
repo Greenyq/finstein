@@ -17,6 +17,7 @@ import type { Lang } from "../../locales/index.js";
 import { t, detectLang } from "../../locales/index.js";
 import { formatApiError } from "../../utils/anthropic.js";
 import Anthropic from "@anthropic-ai/sdk";
+import { backfillMonthlyRecurring } from "../../services/scheduler.js";
 
 /**
  * Show recent transactions with edit/delete buttons (reusable mini-history).
@@ -94,6 +95,30 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
   // Pre-filter: skip obviously non-financial messages to save API tokens
   if (!isLikelyFinancial(text)) {
     await ctx.reply(t("msg.not_financial", lang)(), { parse_mode: "Markdown" });
+    return;
+  }
+
+  // Explicit user request: "carry/transfer recurring mandatory expenses now"
+  if (looksLikeRecurringCarryRequest(text)) {
+    const added = await backfillMonthlyRecurring(ctx.dbUser.id);
+    const lang = (ctx.dbUser.language || detectLang(text)) as Lang;
+    const ru = lang === "ru";
+
+    if (added > 0) {
+      await ctx.reply(
+        ru
+          ? `✅ Готово — перенёс *${added}* обязательных/регулярных расходов в текущий месяц.\n\nПроверить список: /recurring`
+          : `✅ Done — I carried over *${added}* recurring/mandatory expenses into this month.\n\nCheck list: /recurring`,
+        { parse_mode: "Markdown" },
+      );
+    } else {
+      await ctx.reply(
+        ru
+          ? `ℹ️ Нечего переносить: все регулярные расходы за текущий месяц уже добавлены.\n\nПроверь /recurring или добавь новый через \`/recurring add Name Amount Day\`.`
+          : `ℹ️ Nothing to carry over: recurring expenses for this month are already added.\n\nCheck /recurring or add one via \`/recurring add Name Amount Day\`.`,
+        { parse_mode: "Markdown" },
+      );
+    }
     return;
   }
 
@@ -231,6 +256,15 @@ export async function handleTextMessage(ctx: AuthContext, textOverride?: string)
     });
     await ctx.reply(t("msg.error", lang)());
   }
+}
+
+function looksLikeRecurringCarryRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+
+  const carryWords = /(перенес|переноси|перенести|перенеси|добавь|подтян|carry|move|transfer|bring|add)/i;
+  const recurringWords = /(регулярн|постоянн|обязательн|ипотек|аренд|кредит|подписк|коммунал|fixed|recurring|mortgage|rent|loan|subscription|utilities)/i;
+
+  return carryWords.test(lower) && recurringWords.test(lower);
 }
 
 /**
