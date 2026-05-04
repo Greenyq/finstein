@@ -10,7 +10,8 @@ const translations = {
   },
   "start.features": {
     ru: () =>
-      `*Что я умею:*\n\n` +
+      `*Что делает бот Finstein:*\n\n` +
+      `Я помогаю вести личный/семейный бюджет: сохраняю траты и доходы, считаю сводки и подсказываю, где можно сэкономить.\n\n` +
       `*1. Записывать расходы и доходы*\n` +
       `Просто напиши мне:\n` +
       `_"продукты 850"_  •  _"зарплата 3500"_  •  _"restaurant 45"_\n\n` +
@@ -22,9 +23,13 @@ const translations = {
       `/chart — визуальные графики расходов\n` +
       `/report — AI-анализ финансов\n\n` +
       `*5. Семейный бюджет*\n` +
-      `/invite — пригласи семью, все траты в одном месте.`,
+      `/invite — пригласи семью, все траты в одном месте.\n\n` +
+      `*6. Постоянные расходы без ручного переноса*\n` +
+      `/recurring — добавь ежемесячные траты (аренда, подписки, кредиты), бот перенесёт их в новый месяц автоматически.\n` +
+      `Если сумма изменилась: /recurring set Name NewAmount [NewDay]`,
     en: () =>
-      `*What I can do:*\n\n` +
+      `*What Finstein does:*\n\n` +
+      `I help you manage personal/family finances: track income and expenses, build summaries, and suggest savings opportunities.\n\n` +
       `*1. Record expenses and income*\n` +
       `Just text me:\n` +
       `_"groceries 850"_  •  _"paycheck 3500"_  •  _"restaurant 45"_\n\n` +
@@ -36,7 +41,10 @@ const translations = {
       `/chart — visual expense charts\n` +
       `/report — AI financial analysis\n\n` +
       `*5. Family budget*\n` +
-      `/invite — invite family, track expenses together.`,
+      `/invite — invite family, track expenses together.\n\n` +
+      `*6. Recurring expenses without manual carry-over*\n` +
+      `/recurring — add monthly bills (rent, subscriptions, loans), and the bot will carry them into each new month automatically.\n` +
+      `Need to change an amount later? Use: /recurring set Name NewAmount [NewDay]`,
   },
   "start.trial": {
     ru: () =>

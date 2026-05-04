@@ -543,7 +543,9 @@ async function autoAddDailyRecurring(userId: string, dayOfMonth: number): Promis
     where: {
       userId,
       isActive: true,
-      dayOfMonth: dayOfMonth,
+      OR: dayOfMonth === 1
+        ? [{ dayOfMonth: 1 }, { dayOfMonth: null }]
+        : [{ dayOfMonth }],
     },
   });
 
@@ -595,7 +597,10 @@ export async function backfillMonthlyRecurring(userId: string): Promise<number> 
     where: {
       userId,
       isActive: true,
-      dayOfMonth: { lte: todayDay },
+      OR: [
+        { dayOfMonth: { lte: todayDay } },
+        ...(todayDay >= 1 ? [{ dayOfMonth: null }] : []),
+      ],
     },
   });
 
